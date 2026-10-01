@@ -15,3 +15,6 @@
 Пожелания и общий рейтинг — через Yandex Cloud Function и Object Storage, как настроить — [`serverless/README.md`](serverless/README.md).
 
 Чистый three.js (CDN), без сборки: `index.html`, `style.css`, `js/game.js`.
+
+После правок в `style.css` или `js/` перед коммитом запускать `./scripts/version.sh` — он проставляет версию в ссылки,
+чтобы браузеры не брали старые файлы из кэша Pages.
