@@ -15,7 +15,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Manrope:wght@500;600;700;800&family=Unbounded:wght@700;900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
-<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js"}}</script>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"}}</script>
 </head>
 <body>
 <canvas id="c"></canvas>
@@ -29,7 +29,7 @@
     <div class="melons">🍉 <span id="melons">0</span></div>
   </div>
   <div class="boost" id="boost" hidden>
-    <span>🎂 буст ×2</span>
+    <span id="boostLabel">🎂 буст ×2</span>
     <i><b id="boostBar"></b></i>
   </div>
   <div class="hud-r">
@@ -39,11 +39,13 @@
 </div>
 
 <div id="floats"></div>
+<div id="notice" hidden></div>
 
 <div id="toast" hidden>
   <div class="toast-k">🎉 буст!</div>
   <div class="toast-t">С днём рождения, Оля!</div>
   <div class="toast-w" id="toastWish"></div>
+  <div class="toast-f" id="toastFrom" hidden></div>
 </div>
 
 <section id="title" class="screen">
@@ -55,7 +57,7 @@
     <div class="title-text">
       <div class="kicker">🎂 С днём рождения, Оля!</div>
       <h1>Arbuz<br>Surfer</h1>
-      <p class="lead">Катись по волне, уворачивайся от сообщений Паши&nbsp;Притчина, собирай арбузы 🍉 и лови поздравления — они бустят.</p>
+      <p class="lead">Катись по волне от пирамид до Томи, уворачивайся от сообщений Паши&nbsp;Притчина и акул, разбивай «увольняюсь» Кирилла, собирай арбузы 🍉 и лови подарки: поздравление, фильтр-кофе ☕ и хаски 🐺.</p>
       <div class="btns">
         <button class="btn primary" id="btnPlay">Поехали 🏄‍♀️</button>
         <button class="btn ghost" id="btnCard1">Открытка 💌</button>
@@ -83,6 +85,16 @@
       </div>
       <div class="record" id="newRecord" hidden>Новый рекорд! 🎉</div>
       <div class="rank"><span class="rank-e" id="rankEmoji">🫧</span><div><b id="rankName">Пенка</b><small id="rankNext"></small></div></div>
+      <div class="online" id="onlineBox" hidden>
+        <label class="name-row"><span>Имя для рейтинга</span><input id="nameInput" maxlength="24" placeholder="Как тебя зовут?" autocomplete="nickname"></label>
+        <form id="wishForm" class="wish">
+          <textarea id="wishText" maxlength="160" rows="2" placeholder="Пожелание Оле — она найдёт его в подарке 🎁"></textarea>
+          <button class="btn ghost" type="submit">Отправить 💌</button>
+        </form>
+        <div class="wish-done" id="wishDone" hidden>Спасибо! Оля найдёт его в подарке 🎁</div>
+        <div class="wish-err" id="wishErr" hidden>Не отправилось — попробуй ещё раз</div>
+      </div>
+      <div class="leaders-t" id="leadersTitle">Рейтинг</div>
       <ol class="leaders" id="leaders"></ol>
       <div class="btns">
         <button class="btn primary" id="btnAgain">Ещё волну 🌊</button>
@@ -119,12 +131,15 @@
       <p>Пусть жизнь будет как идеальный сет: длинные чистые волны, тёплый океан и закат, от которого невозможно оторваться.</p>
       <p>Больше дорог, вэнов с досками, дюн, верблюдов и арбузов — и чтобы все сообщения были только приятными 😉</p>
       <button class="btn primary" id="btnCardPlay">Кататься 🏄‍♀️</button>
+      <div class="collected-t">Собранные поздравления · <span id="collectedCount">0</span></div>
+      <ul class="collected" id="collected"></ul>
     </div>
   </div>
 </section>
 
 <div id="loading"><div class="spin">🍉</div><div>Ловим волну…</div></div>
 
+<script src="js/config.js"></script>
 <script type="module" src="js/game.js"></script>
 </body>
 </html>
