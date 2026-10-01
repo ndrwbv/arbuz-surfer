@@ -1006,10 +1006,11 @@ const Wishes = {
 
 // ───────────────────────── game state
 const G = {
-  state: 'loading', t: 0, run: 0, dist: 0, runDist: 0, speed: 12, score: 0, scoreF: 0, melons: 0, best: store.get('best', 0),
+  state: 'loading', lives: 3, t: 0, run: 0, dist: 0, runDist: 0, speed: 12, score: 0, scoreF: 0, melons: 0, best: store.get('best', 0),
   boost: 0, boostMax: 6.5, fly: 0, husky: 0, nextRowZ: -50, sincePower: 0, lastHit: null, streak: 0, lastMelonT: 0, shake: 0,
   slowmo: 1, dyingT: 0, stumbleT: 0, nextPropZ: 70, nextGroundZ: 80, biome: -1, nextCameo: 14, cameoIdx: 0,
 };
+const START_LIVES = 3, MAX_LIVES = 5;
 const FLY_T = 6.5, FLY_H = 5.2, HUSKY_T = 3.4, HUSKY_H = 8.5;
 const player = { lane: 1, prevLane: 1, x: 0, h: 0, vy: 0, air: false, duckT: 0, duck: 0, invuln: 0, jumpT: 0, trick: 0, carve: 0 };
 const entities = [];
@@ -1090,10 +1091,19 @@ function makeHusky() {
   return g;
 }
 function animHusky(h, t, fly) { h.userData.legs.forEach((l, i) => { l.rotation.x = fly ? (i < 2 ? -1.15 : 1.15) : Math.sin(t * 14 + (i % 2) * Math.PI + (i > 1 ? 1.2 : 0)) * 0.7; }); }
+function makeHeart() {
+  const g = new THREE.Group(), sh = new THREE.Shape();
+  sh.moveTo(0, -0.42); sh.bezierCurveTo(-0.1, -0.3, -0.5, -0.05, -0.5, 0.18); sh.bezierCurveTo(-0.5, 0.42, -0.2, 0.52, 0, 0.3);
+  sh.bezierCurveTo(0.2, 0.52, 0.5, 0.42, 0.5, 0.18); sh.bezierCurveTo(0.5, -0.05, 0.1, -0.3, 0, -0.42);
+  const geo = new THREE.ExtrudeGeometry(sh, { depth: 0.18, bevelEnabled: true, bevelThickness: 0.06, bevelSize: 0.05, bevelSegments: 3, curveSegments: 16 }); geo.center();
+  g.add(new THREE.Mesh(geo, MAT('#ff3b5c', { roughness: 0.3, emissive: '#ff1744', emissiveIntensity: 0.5 })));
+  return g;
+}
 const POWERS = {
   gift: { make: makeGift, ring: '#ffe08a', spark: ['#ffd34a', '#ff7aa2'] },
   coffee: { make: makeCoffee, ring: '#e8c39e', spark: ['#c8a27a', '#ffffff'] },
   husky: { make: makeHusky, ring: '#9fdcff', spark: ['#9fdcff', '#ffffff'] },
+  heart: { make: makeHeart, ring: '#ff8aa8', spark: ['#ff4f7b', '#ffffff'] },
 };
 function addPower(type, lane, z) {
   const P = POWERS[type], m = P.make();
@@ -1113,7 +1123,7 @@ function spawnRow(z) {
   const kirill = (lane, p = 0.45) => { if (G.run > 3 && Math.random() < p) { addObstacle('kirill', lane, z); return true; } return false; };
   if (G.sincePower > 12 && !flying() && Math.random() < 0.4) {
     G.sincePower = 0;
-    const r = Math.random(), type = r < 0.46 ? 'gift' : r < 0.74 ? 'coffee' : 'husky';
+    const r = Math.random(), type = G.lives < MAX_LIVES && Math.random() < (G.lives <= 1 ? 0.45 : 0.18) ? 'heart' : r < 0.46 ? 'gift' : r < 0.74 ? 'coffee' : 'husky';
     addPower(type, lanes[0], z);
     if (d > 0.2) addObstacle(pick(['low', 'tall']), lanes[1], z);
     return;
@@ -1336,7 +1346,7 @@ const rideHusky = makeHusky(); rideHusky.visible = false; olya.model.add(rideHus
 // ───────────────────────── DOM / UI
 const ui = {
   hud: $('hud'), score: $('score'), melons: $('melons'), boost: $('boost'), boostBar: $('boostBar'), boostLabel: $('boostLabel'), toast: $('toast'), toastWish: $('toastWish'), toastFrom: $('toastFrom'),
-  speedo: $('speedo'), title: $('title'), over: $('over'), pause: $('pause'), card: $('card'), floats: $('floats'), flash: $('flash'), notice: $('notice'),
+  speedo: $('speedo'), lives: $('lives'), title: $('title'), over: $('over'), pause: $('pause'), card: $('card'), floats: $('floats'), flash: $('flash'), notice: $('notice'),
 };
 const floats = [];
 const _p = new THREE.Vector3();
@@ -1410,7 +1420,8 @@ function resetRide() {
 function startRun() {
   Sound.init();
   clearEntities(); clearCameos(); resetRide();
-  Object.assign(G, { state: 'play', run: 0, runDist: 0, speed: 15, score: 0, scoreF: 0, melons: 0, boost: 0, fly: 0, husky: 0, nextRowZ: -55, sincePower: 5, streak: 0, slowmo: 1, stumbleT: 0, biome: -1, nextCameo: rand(10, 14), lastHit: null, speedLvl: 0 });
+  Object.assign(G, { state: 'play', run: 0, runDist: 0, speed: 15, score: 0, scoreF: 0, melons: 0, boost: 0, fly: 0, husky: 0, nextRowZ: -55, sincePower: 5, streak: 0, slowmo: 1, stumbleT: 0, biome: -1, nextCameo: rand(10, 14), lastHit: null, speedLvl: 0, lives: START_LIVES });
+  renderLives(false);
   Object.assign(player, { lane: 1, prevLane: 1, h: 0, vy: 0, air: false, duckT: 0, invuln: 0, trick: 0 });
   resetScenery();
   camMode = 'chase';
@@ -1463,6 +1474,9 @@ function startPower(type) {
     G.fly = FLY_T; G.speed *= 1.25; jet.visible = true; player.air = false; player.trick = 0;
     Sound.coffee(); notice('☕ Летим на кофейной тяге!');
     for (let z = -12; z > -200; z -= 2.6) addMelon([1, 0, 1, 2][Math.floor(-z / 24) % 4], z, FLY_H + 0.9);
+  } else if (type === 'heart') {
+    G.lives = Math.min(MAX_LIVES, G.lives + 1); renderLives(true); Sound.chime(); notice('❤️ +1 жизнь');
+    burst(player.x, player.h + 1.2, 0, 40, { spread: 3, up: 5, life: 1, size: 0.25, colors: ['#ff4f7b', '#ff8aa8', '#ffffff'], grav: 6, scroll: 0 });
   } else if (type === 'husky') {
     G.husky = HUSKY_T; G.speed *= 1.6; player.air = false; player.trick = 0;
     olya.board.visible = false; rideHusky.visible = true; olya.rider.position.y = 0.42;
@@ -1715,7 +1729,7 @@ function update(rawDt) {
         if (k >= 1) { e.phase = 'gone'; burst(e.x, 0.3, e.z, 30, { spread: 2, up: 5, life: 0.8, size: 0.35 }); }
       } else e.mesh.position.y = -6;
       e.mesh.userData.tail.rotation.y = Math.sin(t * 10 + e.seed) * 0.35;
-      if (playing && e.yMax > 0 && collides(e, prevZ)) hitObstacle(e);
+      if (playing && !e.dead && e.yMax > 0 && collides(e, prevZ)) hitObstacle(e);
     } else if (e.kind === 'melon') {
       e.mesh.rotation.y += dt * 3.2;
       let y = e.y + Math.sin(t * 3 + e.seed) * 0.08;
@@ -1770,12 +1784,24 @@ function hitObstacle(e) {
   if (switching) {
     player.lane = player.prevLane; player.invuln = 0.7; G.shake = 0.5; Sound.bump();
     burst(player.x, 1.0, 0, 20, { spread: 2, up: 4, life: 0.6, size: 0.3 });
-    if (G.stumbleT > 0) { wipeout(e); return; }
+    if (G.stumbleT > 0) { loseLife(e); return; }
     G.stumbleT = 5;
     floatText('Ой!', player.x, 2.2, 0);
     return;
   }
-  wipeout(e);
+  loseLife(e);
+}
+function loseLife(e) {
+  G.lives--; renderLives(true);
+  if (G.lives <= 0) { wipeout(e); return; }
+  e.dead = true; player.invuln = 2.2; player.duckT = 0.35; G.speed *= 0.8; G.shake = 0.8; G.stumbleT = 0; flash(); Sound.bump();
+  burst(e.x, 1.2, e.z, 45, { spread: 3.5, up: 6, life: 0.9, size: 0.32, colors: ['#ffffff', '#ff8aa8', '#ff4f7b'] });
+  floatText('💔', player.x, player.h + 2.2, 0, 'smash');
+  notice(G.lives === 1 ? '💔 Последняя жизнь — аккуратнее!' : `💔 Осталось жизней: ${G.lives}`);
+}
+function renderLives(bump) {
+  const el = ui.lives; el.textContent = '❤️'.repeat(Math.max(0, G.lives)) + '🤍'.repeat(Math.max(0, START_LIVES - G.lives));
+  if (bump) { el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); }
 }
 function collectMelon(e) {
   if (G.t - G.lastMelonT > 0.7) G.streak = 0;

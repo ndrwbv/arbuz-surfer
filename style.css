@@ -81,6 +81,9 @@ h1 {
 .hud-l { display: flex; flex-direction: column; gap: 4px; }
 .score { font: 900 38px/1 var(--display); color: #fff; text-shadow: 0 3px 0 rgba(160, 50, 60, .45), 0 0 20px rgba(255,120,80,.4); font-variant-numeric: tabular-nums; }
 .melons { font: 800 18px var(--body); color: #fff; text-shadow: 0 2px 0 rgba(140,40,50,.5); }
+.lives { font-size: 20px; letter-spacing: 2px; filter: drop-shadow(0 2px 0 rgba(140,40,50,.35)); }
+.lives.bump { animation: livesBump .45s cubic-bezier(.2,1.6,.4,1); }
+@keyframes livesBump { 0% { transform: scale(1.35); } 100% { transform: scale(1); } }
 .speedo { font: 800 13px var(--body); color: #fff; text-shadow: 0 2px 0 rgba(140,40,50,.5); opacity: .9; font-variant-numeric: tabular-nums; }
 .hud-r { display: flex; gap: 8px; }
 .boost { position: absolute; left: 50%; top: max(16px, env(safe-area-inset-top)); transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 6px; font: 800 14px var(--body); color: #fff; text-shadow: 0 2px 0 rgba(150,60,0,.5); text-transform: uppercase; letter-spacing: .06em; }
