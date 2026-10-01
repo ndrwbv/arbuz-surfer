@@ -1131,7 +1131,7 @@ const G = {
 };
 const START_LIVES = 3, MAX_LIVES = 5;
 const FLY_T = 6.5, FLY_H = 5.2, HUSKY_T = 3.4, HUSKY_H = 8.5;
-const player = { lane: 1, prevLane: 1, x: 0, h: 0, vy: 0, air: false, duckT: 0, duck: 0, invuln: 0, jumpT: 0, trick: 0, carve: 0 };
+const player = { lane: 1, prevLane: 1, x: 0, h: 0, vy: 0, air: false, duckT: 0, duck: 0, invuln: 0, jumpT: 0, trick: 0, carve: 0, grav: 30, airT: 0.71, jumpBuf: 0 };
 const entities = [];
 const cameos = [];
 let camMode = 'title';
@@ -1264,7 +1264,8 @@ function spawnRow(z) {
   kinds.forEach((k, i) => addObstacle(k, lanes[i], z));
   if (kinds[2] === 'low') melonArc(lanes[2], z);
 }
-function rowGap() { return Math.max(12, G.speed * rand(0.62, 0.95) * (G.run < 10 ? 1.35 : 1)); }
+// rows are spaced in time, with a bit more room at high speed so there is time to land and jump again
+function rowGap() { return Math.max(12, G.speed * rand(0.66, 0.98) * (G.run < 10 ? 1.35 : 1) * (1 + clamp((G.speed - 24) / 24, 0, 1) * 0.25)); }
 function removeEntity(i) { const e = entities[i]; scene.remove(e.mesh); entities.splice(i, 1); }
 function clearEntities() { for (let i = entities.length - 1; i >= 0; i--) removeEntity(i); }
 
@@ -1667,16 +1668,20 @@ function move(dir) {
   if (nl === player.lane) return;
   player.prevLane = player.lane; player.lane = nl; Sound.lane();
 }
+// the jump gets quicker as the wave speeds up: same height, shorter airtime
+const jumpK = () => clamp(G.speed / 18, 1, 1.75);
 function jump() {
-  if (G.state !== 'play' || player.air || flying()) return;
-  player.air = true; player.vy = 10.6; player.jumpT = 0; player.duckT = 0;
+  if (G.state !== 'play' || flying()) return;
+  if (player.air) { if (player.vy < 0 && player.h < 1.4) player.jumpBuf = 0.3; return; } // swipe just before landing → jump on touchdown
+  const k = jumpK();
+  player.air = true; player.vy = 10.6 * k; player.grav = 30 * k * k; player.airT = 0.71 / k; player.jumpT = 0; player.duckT = 0; player.jumpBuf = 0;
   player.trick = Math.random() < 0.4 ? (Math.random() < 0.5 ? 1 : -1) : 0;
   Sound.jump();
   burst(player.x, 0.3, 0.8, 18, { spread: 1.5, up: 4, life: 0.6, size: 0.25 });
 }
 function duck() {
   if (G.state !== 'play' || flying()) return;
-  if (player.air) { player.vy = -18; player.duckT = 0.55; } else { player.duckT = 0.85; Sound.duck(); }
+  if (player.air) { player.vy = -18 * jumpK(); player.duckT = 0.55; player.jumpBuf = 0; } else { player.duckT = 0.85 / Math.sqrt(jumpK()); Sound.duck(); }
 }
 function togglePause() {
   if (G.state === 'play') { G.state = 'paused'; show(ui.pause); Sound.setMusic(0.05); }
@@ -1838,8 +1843,8 @@ function update(rawDt) {
       G.husky -= dt; player.h = Math.sin(Math.PI * clamp(1 - G.husky / HUSKY_T, 0, 1)) * HUSKY_H;
       if (G.husky <= 0) { endHusky(); player.h = 0.2; player.air = true; player.vy = -3; player.invuln = Math.max(player.invuln, 1.3); }
     } else if (player.air) {
-      player.jumpT += dt; player.h += player.vy * dt; player.vy -= 30 * dt;
-      if (player.h <= 0) { player.h = 0; player.air = false; player.trick = 0; Sound.land(); burst(player.x, 0.2, 0.3, 26, { spread: 2.2, up: 4.5, life: 0.7, size: 0.28 }); }
+      player.jumpT += dt; player.h += player.vy * dt; player.vy -= player.grav * dt; player.jumpBuf = Math.max(0, player.jumpBuf - dt);
+      if (player.h <= 0) { player.h = 0; player.air = false; player.trick = 0; Sound.land(); burst(player.x, 0.2, 0.3, 26, { spread: 2.2, up: 4.5, life: 0.7, size: 0.28 }); if (player.jumpBuf > 0) jump(); }
     }
     player.duckT = Math.max(0, player.duckT - dt);
     player.invuln = Math.max(0, player.invuln - dt);
@@ -1856,7 +1861,7 @@ function update(rawDt) {
   if (!dying) {
     olya.root.rotation.set(slope * 0.9 + (player.air ? -0.12 : 0) + (G.husky > 0 ? -0.25 * Math.cos(Math.PI * (1 - G.husky / HUSKY_T)) : 0), -player.carve * 0.12, -player.carve * 0.16 + Math.sin(t * 1.7) * 0.03);
     poseOlya(t, player.duck * (G.husky > 0 ? 0.85 : 1), player.air || G.fly > 0 ? 1 : 0, player.carve, clamp((G.speed - 8) / 26, 0, 1) + (player.air || flying() ? 0.3 : 0));
-    if (player.trick) olya.model.rotation.y = player.trick * Math.PI * 2 * clamp(player.jumpT / 0.68, 0, 1);
+    if (player.trick) olya.model.rotation.y = player.trick * Math.PI * 2 * clamp(player.jumpT / (player.airT * 0.96), 0, 1);
     else olya.model.rotation.y = damp(olya.model.rotation.y, 0, 10, dt);
     if (rideHusky.visible) animHusky(rideHusky, t, true);
     if (jet.visible) { jetStream.scale.y = 1.4 + Math.sin(t * 40) * 0.2; jetStream.position.y = -0.4 - jetStream.scale.y / 2; }
