@@ -986,13 +986,8 @@ const Wishes = {
   pool: WISHES.map((text, i) => ({ id: 'b' + i, text, name: '' })),
   seen: new Set(store.get('seenWishes', [])),
   collected: store.get('collected', []),
-  async load() {
-    if (!Online.on) return;
-    try {
-      const list = await Online.call('wishes');
-      for (const w of list) if (w && w.id && w.text && !this.pool.some((p) => p.id === w.id)) this.pool.unshift({ id: w.id, text: w.text, name: w.name || '' });
-    } catch {}
-  },
+  merge(list) { for (const w of list || []) if (w && w.id && w.text && !this.pool.some((p) => p.id === w.id)) this.pool.unshift({ id: w.id, text: w.text, name: w.name || '' }); },
+  async load() { if (!Online.on) return; try { this.merge(await Online.call('wishes')); } catch {} },
   next() {
     let cand = this.pool.filter((w) => !this.seen.has(w.id));
     if (!cand.length) { this.seen.clear(); cand = this.pool.slice(); }
@@ -1392,24 +1387,79 @@ function renderCollected() {
     ? list.slice().reverse().map((w) => `<li>${escapeHtml(w.text)}${w.name ? `<small>— ${escapeHtml(w.name)}</small>` : ''}</li>`).join('')
     : '<li class="empty">Лови 🎁 в игре — в каждом подарке поздравление</li>';
 }
-async function renderLeaders(score) {
-  const el = $('leaders');
-  const local = () => {
-    const runs = store.get('runs', []);
-    el.innerHTML = runs.map((x) => `<li class="${x.s === score ? 'me' : ''}"><span>${new Date(x.d).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}</span><b>${x.s}</b></li>`).join('');
-  };
-  $('leadersTitle').textContent = Online.on ? 'Рейтинг' : 'Твои лучшие заезды';
-  if (!Online.on) return local();
-  el.innerHTML = '<li class="empty">загружаем рейтинг…</li>';
-  try {
-    const name = store.get('name', '');
-    if (name) await Online.call('score', { player: playerId, name, score: G.best, melons: G.melons });
-    const r = await Online.call('leaderboard', null, { player: playerId });
-    el.innerHTML = r.top.map((x, i) => `<li class="${r.me && r.me.rank === i + 1 ? 'me' : ''}"><span>${escapeHtml(x.name)}</span><b>${x.score}</b></li>`).join('')
-      + (r.me && r.me.rank > r.top.length ? `<li class="me gap"><span>${r.me.rank}. ты</span><b>${r.me.score}</b></li>` : '');
-    if (!r.top.length) el.innerHTML = '<li class="empty">Пока пусто — будь первым</li>';
-  } catch { local(); }
+// game over is a short flow: result → name (first time) → wish → board with the rating and all wishes
+const GO_STEPS = ['result', 'name', 'wish', 'board'];
+const myWishes = new Set(store.get('myWishes', []));
+let wishAsked = false, scorePosted = null, nameReturn = null;
+function overStep(name) {
+  for (const s of document.querySelectorAll('#over .go-step')) s.hidden = s.dataset.step !== name;
+  $('goCard').classList.toggle('wide', name === 'board');
+  const i = GO_STEPS.indexOf(name); [...$('goDots').children].forEach((d, k) => d.classList.toggle('on', k === i));
+  $('goDots').hidden = !Online.on;
+  if (name === 'name') setTimeout(() => $('nameInput').focus(), 80);
+  if (name === 'wish') { $('wishErr').hidden = true; setTimeout(() => $('wishText').focus(), 80); }
+  if (name === 'board') renderBoard();
 }
+const afterName = () => overStep(!store.get('wished', false) && !wishAsked ? 'wish' : 'board');
+function postScore() {
+  const name = store.get('name', '');
+  if (!Online.on || !name) return;
+  scorePosted = Online.call('score', { player: playerId, name, score: G.best, melons: G.melons }).catch(() => {});
+}
+async function renderBoard() {
+  const el = $('leaders'), wl = $('wishesList'), name = store.get('name', '');
+  $('goMe').innerHTML = !Online.on ? '' : name
+    ? `Играешь как <b>${escapeHtml(name)}</b> · <button id="changeName">сменить имя</button> · <button id="moreWish">ещё пожелание</button>`
+    : '<button id="changeName">Попасть в рейтинг</button> · <button id="moreWish">оставить пожелание</button>';
+  if ($('changeName')) $('changeName').onclick = () => { nameReturn = 'board'; $('nameInput').value = name; overStep('name'); };
+  if ($('moreWish')) $('moreWish').onclick = () => overStep('wish');
+  const local = () => {
+    el.innerHTML = store.get('runs', []).map((x) => `<li><span>${new Date(x.d).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}</span><b>${x.s}</b></li>`).join('') || '<li class="empty">Пока пусто</li>';
+  };
+  if (!Online.on) { local(); wl.innerHTML = '<li class="empty">Пожелания появятся, когда подключится сервер</li>'; return; }
+  el.innerHTML = '<li class="empty">загружаем…</li>'; wl.innerHTML = '<li class="empty">загружаем…</li>';
+  const leaders = (async () => {
+    try {
+      await scorePosted;
+      const r = await Online.call('leaderboard', null, { player: playerId });
+      el.innerHTML = r.top.map((x, i) => `<li class="${r.me && r.me.rank === i + 1 ? 'me' : ''}"><span>${escapeHtml(x.name)}</span><b>${x.score}</b></li>`).join('')
+        + (r.me && r.me.rank > r.top.length ? `<li class="me gap"><span>${r.me.rank}. ты</span><b>${r.me.score}</b></li>` : '');
+      if (!r.top.length) el.innerHTML = '<li class="empty">Пока пусто — будь первым</li>';
+    } catch { local(); }
+  })();
+  try {
+    const list = await Online.call('wishes');
+    Wishes.merge(list);
+    $('wishesCount').textContent = list.length ? `· ${list.length}` : '';
+    wl.innerHTML = list.length
+      ? list.slice().reverse().map((w) => `<li class="${myWishes.has(w.id) ? 'mine' : ''}"><small>${escapeHtml(w.name || 'Без имени')}</small>${escapeHtml(w.text)}</li>`).join('')
+      : '<li class="empty">Пока никто не написал — будь первым 💌</li>';
+  } catch { wl.innerHTML = '<li class="empty">Не загрузилось 😕 попробуй ещё раз позже</li>'; }
+  await leaders;
+}
+$('goNext').onclick = () => { if (!Online.on) overStep('board'); else if (!store.get('name', '')) overStep('name'); else afterName(); };
+$('nameForm').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const n = $('nameInput').value.trim().slice(0, 24);
+  if (!n) { $('nameInput').focus(); return; }
+  store.set('name', n); postScore();
+  if (nameReturn) { nameReturn = null; overStep('board'); } else afterName();
+});
+$('wishText').addEventListener('input', () => { $('wishCount').textContent = $('wishText').value.length; });
+$('wishSkip').onclick = () => { wishAsked = true; overStep('board'); };
+$('wishForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const text = $('wishText').value.trim();
+  if (text.length < 2) { $('wishText').focus(); return; }
+  const btn = $('wishSend'); btn.disabled = true; $('wishErr').hidden = true;
+  try {
+    const r = await Online.call('wish', { text, name: store.get('name', ''), player: playerId });
+    myWishes.add(r.id); store.set('myWishes', [...myWishes]); store.set('wished', true); wishAsked = true;
+    $('wishText').value = ''; $('wishCount').textContent = '0';
+    overStep('board');
+  } catch { $('wishErr').hidden = false; }
+  btn.disabled = false;
+});
 
 // ───────────────────────── flow
 function resetRide() {
@@ -1447,10 +1497,8 @@ function gameOver() {
   const { r, next } = rankFor(score);
   $('rankEmoji').textContent = r[1]; $('rankName').textContent = r[2];
   $('rankNext').textContent = next ? `до «${next[2]}» — ${next[0] - score} очков` : 'выше только звёзды';
-  $('onlineBox').hidden = !Online.on;
-  $('nameInput').value = store.get('name', '');
-  $('wishForm').hidden = false; $('wishDone').hidden = true; $('wishErr').hidden = true;
-  renderLeaders(score);
+  nameReturn = null; scorePosted = null; postScore();
+  overStep('result');
   ui.hud.hidden = true; show(ui.over);
   clearEntities(); clearCameos(); resetRide(); camMode = 'title';
   Object.assign(player, { lane: 1, h: 0, air: false }); G.fly = 0; G.husky = 0; G.boost = 0; G.runDist = 0;
@@ -1533,7 +1581,7 @@ addEventListener('touchmove', (e) => {
 }, { passive: true });
 addEventListener('touchend', () => { touch = null; });
 document.addEventListener('touchmove', (e) => { if (!e.target.closest('.screen')) e.preventDefault(); }, { passive: false });
-$('btnPlay').onclick = startRun; $('btnAgain').onclick = startRun; $('btnCardPlay').onclick = startRun;
+$('btnPlay').onclick = startRun; $('btnAgain').onclick = startRun; $('btnAgain2').onclick = startRun; $('btnCardPlay').onclick = startRun;
 $('btnResume').onclick = togglePause; $('btnPause').onclick = togglePause;
 $('btnSound').onclick = () => { Sound.init(); Sound.setMuted(!Sound.muted); $('btnSound').textContent = Sound.muted ? '🔇' : '🔊'; };
 let cardReturn = null;
@@ -1546,20 +1594,6 @@ $('btnShare').onclick = async () => {
   try { if (navigator.share) { await navigator.share({ title: 'Arbuz Surfer', text, url }); return; } } catch { return; }
   try { await navigator.clipboard.writeText(`${text} ${url}`); $('btnShare').textContent = 'Ссылка скопирована ✓'; } catch {}
 };
-$('nameInput').addEventListener('change', () => { store.set('name', $('nameInput').value.trim().slice(0, 24)); renderLeaders(G.score); });
-$('wishForm').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const text = $('wishText').value.trim(), name = $('nameInput').value.trim().slice(0, 24);
-  if (text.length < 2) return;
-  if (name) store.set('name', name);
-  const btn = $('wishForm').querySelector('button'); btn.disabled = true; $('wishErr').hidden = true;
-  try {
-    await Online.call('wish', { text, name, player: playerId });
-    $('wishText').value = ''; $('wishForm').hidden = true; $('wishDone').hidden = false;
-    if (name) renderLeaders(G.score);
-  } catch { $('wishErr').hidden = false; }
-  btn.disabled = false;
-});
 addEventListener('pointerdown', () => Sound.init(), { once: true });
 document.addEventListener('visibilitychange', () => { if (document.hidden && G.state === 'play') togglePause(); });
 
