@@ -903,9 +903,14 @@ const BIOMES = [
   { id: 'moscow', name: '🏙️ Москва-река', ground: '#8d9196' },
   { id: 'piter', name: '🌉 Нева · Питер', ground: '#a0958e' },
   { id: 'tomsk', name: '🌲 Томь · Томск', ground: '#6e8d4c' },
+  { id: 'hawaii', name: '🌺 Гавайи', ground: '#d9bf8a' },
+  { id: 'phiphi', name: '🏝️ Пхи-Пхи', ground: '#f3e6c8' },
+  { id: 'glacier', name: '🧊 Ледники', ground: '#eef4f8' },
 ];
-const BIOME_LEN = 800, SHORE_X = 46, GROUND_LEN = 40, TOD_LEN = 2600;
-const biomeAt = (d) => Math.floor(Math.max(0, d) / BIOME_LEN) % BIOMES.length;
+const BIOME_LEN = 650, SHORE_X = 46, GROUND_LEN = 40, TOD_LEN = 2600;
+// pyramids always open the run, the rest come in a fresh random order every run
+const biomeAt = (d) => G.order[Math.floor(Math.max(0, d) / BIOME_LEN) % G.order.length];
+const shuffledOrder = () => [0, ...[...BIOMES.keys()].slice(1).sort(() => Math.random() - 0.5)];
 const PASTEL = ['#f2d48a', '#9fd3c2', '#f2b5a8', '#c9d6e8', '#efe3c8', '#e8c2d8'];
 
 function makePalm() {
@@ -1002,17 +1007,74 @@ function makeChurch() {
   return g;
 }
 const makeHill = () => { const g = new THREE.Group(); g.add(sph(mc('#5f8a45', { roughness: 1 }), rand(14, 24), rand(5, 9), rand(20, 32))); return g; };
+function makeTiki() {
+  const g = new THREE.Group(), wood = mc('#6b4a33'), straw = mc('#c9a35a', { roughness: 1 });
+  for (const [x, z] of [[-1.6, -1.6], [1.6, -1.6], [-1.6, 1.6], [1.6, 1.6]]) g.add(mesh(CYL16, wood, 0.15, 3, 0.15, x, 1.5, z));
+  g.add(box(wood, 4, 0.25, 4, 0, 1.2, 0)); g.add(mesh(CONE8, straw, 3.2, 2.6, 3.2, 0, 4.2, 0));
+  return g;
+}
+function makeHibiscus() {
+  const g = new THREE.Group(); g.add(sph(mc('#2f6b3a'), rand(1.2, 1.8), rand(0.9, 1.3), rand(1.2, 1.8), 0, 0.9, 0));
+  for (let i = 0; i < 6; i++) { const a = rand(0, 6.28); g.add(sph(mc(pick(['#ff3b6b', '#ff7a3d', '#ffd24a', '#ff5fa2'])), 0.28, 0.2, 0.28, Math.cos(a) * 1.3, rand(0.9, 1.9), Math.sin(a) * 1.3)); }
+  return g;
+}
+function makeBoardRack() {
+  const g = new THREE.Group();
+  ['#ff5e6c', '#4fd1c5', '#ffc93c', '#8b6cff'].slice(0, randi(2, 4)).forEach((c, i) => { const b = makeBoard(mc(c, { roughness: 0.35 })); b.rotation.set(-Math.PI / 2 + rand(-0.15, 0.15), 0, rand(-0.2, 0.2)); b.position.set(0, 1.3, i * 0.9); g.add(b); });
+  return g;
+}
+function makeKarst() {
+  const g = new THREE.Group(), rock = mc(pick(['#9c9585', '#8f8a7c', '#a8a08c']), { roughness: 1 }), green = mc('#4f7a3a', { roughness: 1 });
+  const h = rand(14, 34), r = rand(4, 9);
+  g.add(sph(rock, r, h * 0.5, r * 0.9, 0, h * 0.4, 0)); g.add(sph(rock, r * 0.75, h * 0.35, r * 0.7, rand(-1, 1), h * 0.75, rand(-1, 1)));
+  g.add(sph(green, r * 0.7, h * 0.12, r * 0.65, 0, h * 0.98, 0)); g.add(sph(green, r * 0.5, h * 0.2, r * 0.4, r * 0.6, h * 0.6, 0));
+  return g;
+}
+function makeLongtail() {
+  const g = new THREE.Group(), wood = mc('#8a5a3a'), dark = mc('#3a2a20');
+  g.add(sph(wood, 0.8, 0.45, 4, 0, 0.2, 0)); g.add(box(dark, 1.1, 0.1, 6, 0, 0.55, 0));
+  const bow = mesh(CYL16, wood, 0.18, 2.2, 0.18, 0, 1.2, -4); bow.rotation.x = -0.5; g.add(bow);
+  ['#ff3b6b', '#ffd24a', '#4fd1c5'].forEach((c, i) => g.add(box(mc(c), 0.05, 0.9, 0.1, 0, 1.6 - i * 0.2, -4.35 + i * 0.12)));
+  const pole = mesh(CYL16, dark, 0.06, 3.2, 0.06, 0, 0.6, 4.6); pole.rotation.x = 1.25; g.add(pole);
+  g.rotation.y = rand(-0.6, 0.6);
+  return g;
+}
+const ICO = new THREE.IcosahedronGeometry(1, 0);
+function makeIceberg() {
+  const g = new THREE.Group(), ice = mc(pick(['#eaf7ff', '#dff2fb']), { roughness: 0.25, flatShading: true }), blue = mc('#a9dcf0', { roughness: 0.2, flatShading: true });
+  const s = rand(2.5, 7);
+  const m = mesh(ICO, ice, s * rand(0.9, 1.4), s * rand(0.6, 1.1), s * rand(0.9, 1.4), 0, s * 0.25, 0); m.rotation.y = rand(0, 3); g.add(m);
+  g.add(mesh(ICO, blue, s * 0.7, s * 0.4, s * 0.7, s * 0.4, s * 0.1, rand(-1, 1)));
+  return g;
+}
+function makeIceCliff() {
+  const g = new THREE.Group();
+  for (let i = 0; i < 4; i++) { const h = rand(6, 16); const m = mesh(ICO, mc(pick(['#dff2fb', '#c4e6f4', '#eef8fd']), { roughness: 0.3, flatShading: true }), rand(3, 6), h, rand(3, 6), rand(-3, 3), h * 0.5, i * 4 - 6); m.rotation.y = rand(0, 3); g.add(m); }
+  return g;
+}
+function makePenguin() {
+  const g = new THREE.Group(), black = mc('#1d1f26'), white = mc('#f4f4f2'), orange = mc('#ff9a2a');
+  g.add(sph(black, 0.32, 0.5, 0.3, 0, 0.5, 0)); g.add(sph(white, 0.24, 0.4, 0.2, 0, 0.45, 0.12)); g.add(sph(black, 0.2, 0.2, 0.2, 0, 1.05, 0));
+  const beak = mesh(new THREE.ConeGeometry(0.06, 0.18, 6), orange, 1, 1, 1, 0, 1.03, 0.24); beak.rotation.x = Math.PI / 2; g.add(beak);
+  for (const sx of [-1, 1]) { g.add(sph(orange, 0.1, 0.03, 0.14, sx * 0.12, 0.02, 0.08)); g.add(sph(white, 0.03, 0.03, 0.02, sx * 0.08, 1.1, 0.17)); }
+  return g;
+}
+const makePenguins = () => { const g = new THREE.Group(); for (let i = 0; i < randi(2, 5); i++) { const p = makePenguin(); p.position.set(rand(-1.5, 1.5), 0, rand(-2, 2)); p.rotation.y = -Math.PI / 2 + rand(-0.6, 0.6); p.scale.setScalar(rand(1.1, 1.6)); g.add(p); } return g; };
 const PROPS = {
   desert: [[0.32, makePalm, 48, 62], [0.22, makeDune, 70, 130], [0.14, makeCamel, 52, 72], [0.22, makePyramid, 80, 150], [0.1, makeVan, 48, 54]],
   moscow: [[0.35, makeLamp, 47.4, 47.4], [0.42, makeTower, 95, 160], [0.14, makeKremlinTower, 70, 90], [0.09, makeBasil, 64, 74]],
   piter: [[0.4, makeLamp, 47.4, 47.4], [0.12, makeAdmiralty, 70, 80], [0.1, makeIsaac, 80, 100], [0.38, () => makeFacade(rand(10, 16), rand(14, 20)), 66, 90]],
   tomsk: [[0.25, makeIzba, 52, 62], [0.3, makeBirch, 48, 75], [0.35, makePine, 55, 120], [0.05, makeChurch, 66, 80], [0.05, makeHill, 90, 140]],
+  // 5th field: 'sea' stands in the water, 'float' bobs on the waves
+  hawaii: [[0.36, makePalm, 48, 64], [0.18, makeTiki, 52, 62], [0.2, makeHibiscus, 47.5, 58], [0.12, makeBoardRack, 48, 51], [0.14, makeHill, 80, 140]],
+  phiphi: [[0.34, makeKarst, 16, 70, 'sea'], [0.16, makeLongtail, 11, 24, 'float'], [0.3, makePalm, 48, 60], [0.12, makeTiki, 50, 58], [0.08, makeKarst, 60, 120]],
+  glacier: [[0.34, makeIceberg, 13, 60, 'float'], [0.26, makeIceCliff, 52, 80], [0.2, makePenguins, 47.5, 50], [0.2, makeIceberg, 60, 110, 'sea']],
 };
 function makeGround(b) {
   const g = new THREE.Group(), id = BIOMES[b].id;
   g.add(box(mc(BIOMES[b].ground, { roughness: 1 }), 220, 1.6, GROUND_LEN + 0.6, SHORE_X + 110, 0, 0));
   if (id === 'moscow' || id === 'piter') g.add(box(mc(id === 'moscow' ? '#7d8287' : '#b49a8a', { roughness: 0.9 }), 1.2, 1.1, GROUND_LEN + 0.6, SHORE_X + 0.6, 1.3, 0));
-  else g.add(box(mc(id === 'desert' ? '#efc08a' : '#c9b07a', { roughness: 1 }), 6, 0.9, GROUND_LEN + 0.6, SHORE_X - 1.5, 0.05, 0));
+  else g.add(box(mc({ desert: '#efc08a', tomsk: '#c9b07a', hawaii: '#e8d3a4', phiphi: '#fbf3de', glacier: '#d6ecf6' }[id], { roughness: 1 }), 6, 0.9, GROUND_LEN + 0.6, SHORE_X - 1.5, 0.05, 0));
   if (id === 'moscow') {
     const red = RED(); g.add(box(red, 2.2, 7, GROUND_LEN, SHORE_X + 9, 4.3, 0));
     g.add(mesh(MERLONS, red, 1, 1, 1, SHORE_X + 9, 8.4, 0));
@@ -1030,14 +1092,18 @@ function addProp(z) {
   const list = PROPS[BIOMES[biomeForZ(z)].id];
   let r = Math.random() * list.reduce((s, x) => s + x[0], 0), item = list[0];
   for (const it of list) { r -= it[0]; if (r <= 0) { item = it; break; } }
-  const g = item[1](); g.position.set(rand(item[2], item[3]), 0.8, z); scene.add(g); scenery.push(g);
+  const g = item[1](); g.position.set(rand(item[2], item[3]), item[4] ? -0.3 : 0.8, z); g.userData.float = item[4] === 'float'; scene.add(g); scenery.push(g);
 }
 function addGround(z) { const g = makeGround(biomeForZ(z)); g.position.z = z; scene.add(g); scenery.push(g); }
 function updateScenery(dz) {
   G.nextPropZ += dz; G.nextGroundZ += dz;
   while (G.nextGroundZ > -340) { addGround(G.nextGroundZ); G.nextGroundZ -= GROUND_LEN; }
   while (G.nextPropZ > -330) { addProp(G.nextPropZ); G.nextPropZ -= rand(8, 15); }
-  for (let i = scenery.length - 1; i >= 0; i--) { const s = scenery[i]; s.position.z += dz; if (s.position.z > 90) { scene.remove(s); scenery.splice(i, 1); } }
+  for (let i = scenery.length - 1; i >= 0; i--) {
+    const s = scenery[i]; s.position.z += dz;
+    if (s.userData.float) { s.position.y = waveH(s.position.x, s.position.z - G.dist, G.t) * 0.8 - 0.3; s.rotation.z = Math.sin(G.t * 1.3 + s.position.x) * 0.04; }
+    if (s.position.z > 90) { scene.remove(s); scenery.splice(i, 1); }
+  }
 }
 function resetScenery() {
   for (const s of scenery) scene.remove(s); scenery.length = 0;
@@ -1061,6 +1127,14 @@ const skylines = BIOMES.map(() => { const g = new THREE.Group(); g.visible = fal
   ({ near: n, far: f } = skylines[3].userData); g = skylines[3];
   for (let i = 0; i < 5; i++) g.add(sph(i % 2 ? n : f, rand(80, 140), rand(25, 45), 60, 100 + i * 90, -6, -600 - (i % 2) * 40));
   for (let i = 0; i < 40; i++) { const x = 70 + i * 9 + rand(-3, 3); g.add(mesh(CONE8, n, 4, rand(12, 22), 4, x, 24 + Math.sin(i * 0.4) * 10, -560)); }
+  ({ near: n, far: f } = skylines[4].userData); g = skylines[4];
+  g.add(mesh(new THREE.ConeGeometry(1, 1, 12), n, 150, 120, 150, 230, 56, -640));
+  g.add(mesh(new THREE.CylinderGeometry(40, 95, 55, 12), f, 1, 1, 1, 110, 25, -600));
+  { const glow = new THREE.MeshBasicMaterial({ color: '#ff6a2a', fog: false, transparent: true, opacity: 0, depthWrite: false }); g.add(sph(glow, 16, 6, 16, 230, 116, -640)); g.userData.extra = [[glow, 0.9]]; }
+  ({ near: n, far: f } = skylines[5].userData); g = skylines[5];
+  for (let i = 0; i < 16; i++) { const h = rand(40, 120), r = rand(10, 22), x = 60 + i * 26 + rand(-8, 8), z = -560 - rand(0, 80); g.add(sph(i % 2 ? n : f, r, h * 0.5, r, x, h * 0.4, z)); g.add(sph(i % 2 ? n : f, r * 0.7, h * 0.3, r * 0.7, x, h * 0.8, z)); }
+  ({ near: n, far: f } = skylines[6].userData); g = skylines[6]; skylines[6].userData.mats = [[n, 1.04], [f, 1.12]];
+  for (let i = 0; i < 14; i++) { const h = rand(60, 150); g.add(mesh(new THREE.ConeGeometry(1, 1, 5), i % 2 ? n : f, rand(40, 70), h, rand(40, 70), 70 + i * 30 + rand(-10, 10), h / 2 - 4, -600 - (i % 3) * 30)); }
 }
 
 // ───────────────────────── time of day
@@ -1218,13 +1292,8 @@ const Wishes = {
   pool: WISHES.map((text, i) => ({ id: 'b' + i, text, name: '' })),
   seen: new Set(store.get('seenWishes', [])),
   collected: store.get('collected', []),
-  async load() {
-    if (!Online.on) return;
-    try {
-      const list = await Online.call('wishes');
-      for (const w of list) if (w && w.id && w.text && !this.pool.some((p) => p.id === w.id)) this.pool.unshift({ id: w.id, text: w.text, name: w.name || '' });
-    } catch {}
-  },
+  merge(list) { for (const w of list || []) if (w && w.id && w.text && !this.pool.some((p) => p.id === w.id)) this.pool.unshift({ id: w.id, text: w.text, name: w.name || '' }); },
+  async load() { if (!Online.on) return; try { this.merge(await Online.call('wishes')); } catch {} },
   // a wish for a melon on the field: people's postcards first, not yet read, not already growing on the field
   peek(taken) {
     let cand = this.pool.filter((w) => !this.seen.has(w.id) && !taken.has(w.id));
@@ -1250,16 +1319,18 @@ const Wishes = {
 
 // ───────────────────────── game state
 const G = {
-  state: 'loading', t: 0, run: 0, dist: 0, runDist: 0, speed: 12, score: 0, scoreF: 0, melons: 0, best: store.get('best', 0),
+  state: 'loading', lives: 3, t: 0, run: 0, dist: 0, runDist: 0, speed: 12, score: 0, scoreF: 0, melons: 0, best: store.get('best', 0),
   boost: 0, boostMax: 6.5, fly: 0, husky: 0, wall: 0, wallRoll: 0, nextRowZ: -50, sincePower: 0, lastHit: null, streak: 0, lastMelonT: 0, shake: 0,
   slowmo: 1, dyingT: 0, stumbleT: 0, nextPropZ: 70, nextGroundZ: 80, biome: -1, nextCameo: 14, cameoIdx: 0,
+  order: [0, 1, 2, 3, 4, 5, 6], nextCritter: 2,
 };
+const START_LIVES = 3, MAX_LIVES = 5;
 const FLY_T = 6.5, FLY_H = 5.2, HUSKY_T = 3.4, HUSKY_H = 8.5;
 // carve up the face of the barrel: ← on the left lane rides the wall, then drops back in
 const WALLRIDE_T = 1.5, WALLRIDE_S = 0.25;
 // ← again while on the wall: a full 360 around the inside of the barrel — up the face, across the ceiling, down the curtain
 const LOOP_T = 2.1, LOOP_S1 = 0.86;
-const player = { lane: 1, prevLane: 1, x: 0, h: 0, vy: 0, air: false, duckT: 0, duck: 0, invuln: 0, jumpT: 0, trick: 0, carve: 0 };
+const player = { lane: 1, prevLane: 1, x: 0, h: 0, vy: 0, air: false, duckT: 0, duck: 0, invuln: 0, jumpT: 0, trick: 0, carve: 0, grav: 30, airT: 0.71, jumpBuf: 0 };
 const entities = [];
 const cameos = [];
 let camMode = 'title';
@@ -1338,10 +1409,19 @@ function makeHusky() {
   return g;
 }
 function animHusky(h, t, fly) { h.userData.legs.forEach((l, i) => { l.rotation.x = fly ? (i < 2 ? -1.15 : 1.15) : Math.sin(t * 14 + (i % 2) * Math.PI + (i > 1 ? 1.2 : 0)) * 0.7; }); }
+function makeHeart() {
+  const g = new THREE.Group(), sh = new THREE.Shape();
+  sh.moveTo(0, -0.42); sh.bezierCurveTo(-0.1, -0.3, -0.5, -0.05, -0.5, 0.18); sh.bezierCurveTo(-0.5, 0.42, -0.2, 0.52, 0, 0.3);
+  sh.bezierCurveTo(0.2, 0.52, 0.5, 0.42, 0.5, 0.18); sh.bezierCurveTo(0.5, -0.05, 0.1, -0.3, 0, -0.42);
+  const geo = new THREE.ExtrudeGeometry(sh, { depth: 0.18, bevelEnabled: true, bevelThickness: 0.06, bevelSize: 0.05, bevelSegments: 3, curveSegments: 16 }); geo.center();
+  g.add(new THREE.Mesh(geo, MAT('#ff3b5c', { roughness: 0.3, emissive: '#ff1744', emissiveIntensity: 0.5 })));
+  return g;
+}
 const POWERS = {
   gift: { make: makeGift, ring: '#ffe08a', spark: ['#ffd34a', '#ff7aa2'] },
   coffee: { make: makeCoffee, ring: '#e8c39e', spark: ['#c8a27a', '#ffffff'] },
   husky: { make: makeHusky, ring: '#9fdcff', spark: ['#9fdcff', '#ffffff'] },
+  heart: { make: makeHeart, ring: '#ff8aa8', spark: ['#ff4f7b', '#ffffff'] },
 };
 function addPower(type, lane, z) {
   const P = POWERS[type], m = P.make();
@@ -1484,7 +1564,7 @@ function spawnRow(z) {
   const kirill = (lane, p = 0.45) => { if (G.run > 3 && Math.random() < p) { addObstacle('kirill', lane, z); return true; } return false; };
   if (G.sincePower > 12 && !flying() && Math.random() < 0.4) {
     G.sincePower = 0;
-    const r = Math.random(), type = r < 0.46 ? 'gift' : r < 0.74 ? 'coffee' : 'husky';
+    const r = Math.random(), type = G.lives < MAX_LIVES && Math.random() < (G.lives <= 1 ? 0.45 : 0.18) ? 'heart' : r < 0.46 ? 'gift' : r < 0.74 ? 'coffee' : 'husky';
     addPower(type, lanes[0], z);
     if (d > 0.2) addObstacle(pick(['low', 'tall']), lanes[1], z);
     return;
@@ -1507,7 +1587,8 @@ function spawnRow(z) {
   kinds.forEach((k, i) => addObstacle(k, lanes[i], z));
   if (kinds[2] === 'low') melonArc(lanes[2], z);
 }
-function rowGap() { if (G.mode === 'field') return rand(20, 26); return Math.max(14, G.speed * rand(0.8, 1.1) * lerp(1.35, 0.78, difficulty())); }
+// rows are spaced in time, with a bit more room at high speed so there is time to land and jump again
+function rowGap() { if (G.mode === 'field') return rand(20, 26); return Math.max(14, G.speed * rand(0.8, 1.1) * lerp(1.35, 0.78, difficulty()) * (1 + clamp((G.speed - 24) / 24, 0, 1) * 0.25)); }
 function removeEntity(i) { const e = entities[i]; scene.remove(e.mesh); entities.splice(i, 1); }
 function clearEntities() { for (let i = entities.length - 1; i >= 0; i--) removeEntity(i); }
 
@@ -1755,24 +1836,79 @@ function renderCollected() {
     ? list.slice().reverse().map((w) => `<li>${escapeHtml(w.text)}${w.name ? `<small>— ${escapeHtml(w.name)}</small>` : ''}</li>`).join('')
     : '<li class="empty">Лови 🎁 в игре — в каждом подарке поздравление</li>';
 }
-async function renderLeaders(score) {
-  const el = $('leaders');
-  const local = () => {
-    const runs = store.get('runs', []);
-    el.innerHTML = runs.map((x) => `<li class="${x.s === score ? 'me' : ''}"><span>${new Date(x.d).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}</span><b>${x.s}</b></li>`).join('');
-  };
-  $('leadersTitle').textContent = Online.on ? 'Рейтинг' : 'Твои лучшие заезды';
-  if (!Online.on) return local();
-  el.innerHTML = '<li class="empty">загружаем рейтинг…</li>';
-  try {
-    const name = store.get('name', '');
-    if (name) await Online.call('score', { player: playerId, name, score: G.best, melons: G.melons });
-    const r = await Online.call('leaderboard', null, { player: playerId });
-    el.innerHTML = r.top.map((x, i) => `<li class="${r.me && r.me.rank === i + 1 ? 'me' : ''}"><span>${escapeHtml(x.name)}</span><b>${x.score}</b></li>`).join('')
-      + (r.me && r.me.rank > r.top.length ? `<li class="me gap"><span>${r.me.rank}. ты</span><b>${r.me.score}</b></li>` : '');
-    if (!r.top.length) el.innerHTML = '<li class="empty">Пока пусто — будь первым</li>';
-  } catch { local(); }
+// game over is a short flow: result → name (first time) → wish → board with the rating and all wishes
+const GO_STEPS = ['result', 'name', 'wish', 'board'];
+const myWishes = new Set(store.get('myWishes', []));
+let wishAsked = false, scorePosted = null, nameReturn = null;
+function overStep(name) {
+  for (const s of document.querySelectorAll('#over .go-step')) s.hidden = s.dataset.step !== name;
+  $('goCard').classList.toggle('wide', name === 'board');
+  const i = GO_STEPS.indexOf(name); [...$('goDots').children].forEach((d, k) => d.classList.toggle('on', k === i));
+  $('goDots').hidden = !Online.on;
+  if (name === 'name') setTimeout(() => $('nameInput').focus(), 80);
+  if (name === 'wish') { $('wishErr').hidden = true; setTimeout(() => $('wishText').focus(), 80); }
+  if (name === 'board') renderBoard();
 }
+const afterName = () => overStep(!store.get('wished', false) && !wishAsked ? 'wish' : 'board');
+function postScore() {
+  const name = store.get('name', '');
+  if (!Online.on || !name) return;
+  scorePosted = Online.call('score', { player: playerId, name, score: G.best, melons: G.melons }).catch(() => {});
+}
+async function renderBoard() {
+  const el = $('leaders'), wl = $('wishesList'), name = store.get('name', '');
+  $('goMe').innerHTML = !Online.on ? '' : name
+    ? `Играешь как <b>${escapeHtml(name)}</b> · <button id="changeName">сменить имя</button> · <button id="moreWish">ещё пожелание</button>`
+    : '<button id="changeName">Попасть в рейтинг</button> · <button id="moreWish">оставить пожелание</button>';
+  if ($('changeName')) $('changeName').onclick = () => { nameReturn = 'board'; $('nameInput').value = name; overStep('name'); };
+  if ($('moreWish')) $('moreWish').onclick = () => overStep('wish');
+  const local = () => {
+    el.innerHTML = store.get('runs', []).map((x) => `<li><span>${new Date(x.d).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}</span><b>${x.s}</b></li>`).join('') || '<li class="empty">Пока пусто</li>';
+  };
+  if (!Online.on) { local(); wl.innerHTML = '<li class="empty">Пожелания появятся, когда подключится сервер</li>'; return; }
+  el.innerHTML = '<li class="empty">загружаем…</li>'; wl.innerHTML = '<li class="empty">загружаем…</li>';
+  const leaders = (async () => {
+    try {
+      await scorePosted;
+      const r = await Online.call('leaderboard', null, { player: playerId });
+      el.innerHTML = r.top.map((x, i) => `<li class="${r.me && r.me.rank === i + 1 ? 'me' : ''}"><span>${escapeHtml(x.name)}</span><b>${x.score}</b></li>`).join('')
+        + (r.me && r.me.rank > r.top.length ? `<li class="me gap"><span>${r.me.rank}. ты</span><b>${r.me.score}</b></li>` : '');
+      if (!r.top.length) el.innerHTML = '<li class="empty">Пока пусто — будь первым</li>';
+    } catch { local(); }
+  })();
+  try {
+    const list = await Online.call('wishes');
+    Wishes.merge(list);
+    $('wishesCount').textContent = list.length ? `· ${list.length}` : '';
+    wl.innerHTML = list.length
+      ? list.slice().reverse().map((w) => `<li class="${myWishes.has(w.id) ? 'mine' : ''}"><small>${escapeHtml(w.name || 'Без имени')}</small>${escapeHtml(w.text)}</li>`).join('')
+      : '<li class="empty">Пока никто не написал — будь первым 💌</li>';
+  } catch { wl.innerHTML = '<li class="empty">Не загрузилось 😕 попробуй ещё раз позже</li>'; }
+  await leaders;
+}
+$('goNext').onclick = () => { if (!Online.on) overStep('board'); else if (!store.get('name', '')) overStep('name'); else afterName(); };
+$('nameForm').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const n = $('nameInput').value.trim().slice(0, 24);
+  if (!n) { $('nameInput').focus(); return; }
+  store.set('name', n); postScore();
+  if (nameReturn) { nameReturn = null; overStep('board'); } else afterName();
+});
+$('wishText').addEventListener('input', () => { $('wishCount').textContent = $('wishText').value.length; });
+$('wishSkip').onclick = () => { wishAsked = true; overStep('board'); };
+$('wishForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const text = $('wishText').value.trim();
+  if (text.length < 2) { $('wishText').focus(); return; }
+  const btn = $('wishSend'); btn.disabled = true; $('wishErr').hidden = true;
+  try {
+    const r = await Online.call('wish', { text, name: store.get('name', ''), player: playerId });
+    myWishes.add(r.id); store.set('myWishes', [...myWishes]); store.set('wished', true); wishAsked = true;
+    $('wishText').value = ''; $('wishCount').textContent = '0';
+    overStep('board');
+  } catch { $('wishErr').hidden = false; }
+  btn.disabled = false;
+});
 
 // ───────────────────────── flow
 function resetRide() {
@@ -1786,7 +1922,7 @@ function startRun() {
   Sound.init(); if (G.crack) endCrack(); Sound.setMode('surf');
   if (FIELD.exitBtn) FIELD.exitBtn.hidden = true; if (FIELD.tractorBtn) FIELD.tractorBtn.hidden = true; FIELD.inside = false; ui.score.parentElement.hidden = false; player.z = 0;
   clearEntities(); clearCameos(); resetRide();
-  Object.assign(G, { state: 'play', run: 0, runDist: 0, speed: 15, score: 0, scoreF: 0, melons: 0, boost: 0, fly: 0, husky: 0, wall: 0, wallRoll: 0, loop: false, nextPinch: rand(16, 22), nextRowZ: -55, sincePower: 5, streak: 0, slowmo: 1, stumbleT: 0, biome: -1, nextCameo: rand(10, 14), lastHit: null, speedLvl: 0 });
+  Object.assign(G, { state: 'play', run: 0, runDist: 0, speed: 15, score: 0, scoreF: 0, melons: 0, boost: 0, fly: 0, husky: 0, wall: 0, wallRoll: 0, loop: false, nextPinch: rand(16, 22), nextRowZ: -55, sincePower: 5, streak: 0, slowmo: 1, stumbleT: 0, biome: -1, nextCameo: rand(10, 14), lastHit: null, speedLvl: 0, lives: START_LIVES, order: shuffledOrder() });
   Object.assign(player, { lane: 1, prevLane: 1, h: 0, vy: 0, air: false, duckT: 0, invuln: 0, trick: 0 });
   resetScenery();
   camMode = 'chase';
@@ -2110,10 +2246,8 @@ function gameOver() {
   const { r, next } = rankFor(score);
   $('rankEmoji').textContent = r[1]; $('rankName').textContent = r[2];
   $('rankNext').textContent = next ? `до «${next[2]}» — ${next[0] - score} очков` : 'выше только звёзды';
-  $('onlineBox').hidden = !Online.on;
-  $('nameInput').value = store.get('name', '');
-  $('wishForm').hidden = false; $('wishDone').hidden = true; $('wishErr').hidden = true;
-  renderLeaders(score);
+  nameReturn = null; scorePosted = null; postScore();
+  overStep('result');
   ui.hud.hidden = true; show(ui.over);
   clearEntities(); clearCameos(); resetRide(); camMode = 'title';
   Object.assign(player, { lane: 1, h: 0, air: false }); G.fly = 0; G.husky = 0; G.boost = 0; G.runDist = 0;
@@ -2136,6 +2270,9 @@ function startPower(type) {
     G.fly = FLY_T; G.speed *= 1.25; jet.visible = true; player.air = false; player.trick = 0;
     Sound.coffee(); notice('☕ Летим на кофейной тяге!');
     for (let z = -12; z > -200; z -= 2.6) addMelon([1, 0, 1, 2][Math.floor(-z / 24) % 4], z, FLY_H + 0.9);
+  } else if (type === 'heart') {
+    G.lives = Math.min(MAX_LIVES, G.lives + 1); Sound.chime(); floatText('❤️', player.x, player.h + 2.2, 0, 'smash');
+    burst(player.x, player.h + 1.2, 0, 40, { spread: 3, up: 5, life: 1, size: 0.25, colors: ['#ff4f7b', '#ff8aa8', '#ffffff'], grav: 6, scroll: 0 });
   } else if (type === 'husky') {
     G.husky = HUSKY_T; G.speed *= 1.6; player.air = false; player.trick = 0;
     olya.board.visible = false; rideHusky.visible = true; olya.rider.position.y = 0.42;
@@ -2171,16 +2308,20 @@ function startLoop() {
   const k = clamp(1 - G.wall / WALLRIDE_T, 0, 1);
   G.loop = true; G.loopT = 0; G.loopS0 = WALLRIDE_S * Math.sin(Math.PI * k); G.wall = LOOP_T; Sound.jump();
 }
+// the jump gets quicker as the wave speeds up: same height, shorter airtime
+const jumpK = () => clamp(G.speed / 18, 1, 1.75);
 function jump() {
-  if (G.state !== 'play' || player.air || flying() || G.wall > 0) return;
-  player.air = true; player.vy = 10.6; player.jumpT = 0; player.duckT = 0;
+  if (G.state !== 'play' || flying() || G.wall > 0) return;
+  if (player.air) { if (player.vy < 0 && player.h < 1.4) player.jumpBuf = 0.3; return; } // swipe just before landing → jump on touchdown
+  const k = jumpK();
+  player.air = true; player.vy = 10.6 * k; player.grav = 30 * k * k; player.airT = 0.71 / k; player.jumpT = 0; player.duckT = 0; player.jumpBuf = 0;
   player.trick = Math.random() < 0.4 ? (Math.random() < 0.5 ? 1 : -1) : 0;
   Sound.jump();
   burst(player.x, 0.3, 0.8, 18, { spread: 1.5, up: 4, life: 0.6, size: 0.25 });
 }
 function duck() {
   if (G.state !== 'play' || flying()) return;
-  if (player.air) { player.vy = -18; player.duckT = 0.55; } else { player.duckT = 0.85; Sound.duck(); }
+  if (player.air) { player.vy = -18 * jumpK(); player.duckT = 0.55; player.jumpBuf = 0; } else { player.duckT = 0.85 / Math.sqrt(jumpK()); Sound.duck(); }
 }
 function togglePause() {
   if (G.state === 'play') { G.state = 'paused'; show(ui.pause); Sound.setMusic(0.05); }
@@ -2223,7 +2364,7 @@ addEventListener('touchend', (e) => {
 });
 addEventListener('mousedown', (e) => { if (G.mode === 'field' && G.state === 'play' && !e.target.closest('button, .screen')) fieldTap(e.clientX, e.clientY); });
 document.addEventListener('touchmove', (e) => { if (!e.target.closest('.screen')) e.preventDefault(); }, { passive: false });
-$('btnPlay').onclick = () => startRun(); $('btnAgain').onclick = () => startRun(); $('btnCardPlay').onclick = () => startRun();
+$('btnPlay').onclick = () => startRun(); $('btnAgain').onclick = () => startRun(); $('btnAgain2').onclick = () => startRun(); $('btnCardPlay').onclick = () => startRun();
 // optional: a cached older index.html may not have these buttons yet
 for (const id of ['btnField', 'btnField2']) { const el = $(id); if (el) el.onclick = () => startField(); }
 $('btnResume').onclick = togglePause; $('btnPause').onclick = togglePause;
@@ -2238,20 +2379,6 @@ $('btnShare').onclick = async () => {
   try { if (navigator.share) { await navigator.share({ title: 'Arbuz Surfer', text, url }); return; } } catch { return; }
   try { await navigator.clipboard.writeText(`${text} ${url}`); $('btnShare').textContent = 'Ссылка скопирована ✓'; } catch {}
 };
-$('nameInput').addEventListener('change', () => { store.set('name', $('nameInput').value.trim().slice(0, 24)); renderLeaders(G.score); });
-$('wishForm').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const text = $('wishText').value.trim(), name = $('nameInput').value.trim().slice(0, 24);
-  if (text.length < 2) return;
-  if (name) store.set('name', name);
-  const btn = $('wishForm').querySelector('button'); btn.disabled = true; $('wishErr').hidden = true;
-  try {
-    await Online.call('wish', { text, name, player: playerId });
-    $('wishText').value = ''; $('wishForm').hidden = true; $('wishDone').hidden = false;
-    if (name) renderLeaders(G.score);
-  } catch { $('wishErr').hidden = false; }
-  btn.disabled = false;
-});
 addEventListener('pointerdown', () => Sound.init(), { once: true });
 document.addEventListener('visibilitychange', () => { if (document.hidden && G.state === 'play') togglePause(); });
 
@@ -2273,6 +2400,49 @@ function collides(e, prevZ) {
     && player.h < e.yMax && player.h + (player.duck > 0.5 ? 0.95 : 1.72) > e.yMin;
 }
 
+// fish (and sometimes dolphins, penguins on the ice) jump at the side — pure decoration, no collisions
+const critters = [];
+function makeFish(color) {
+  const g = new THREE.Group(), m = mc(color, { roughness: 0.3, metalness: 0.35 });
+  g.add(sph(m, 0.12, 0.15, 0.36)); const tail = mesh(CONE4, m, 0.16, 0.22, 0.06, 0, 0, -0.42); tail.rotation.x = -Math.PI / 2; g.add(tail);
+  g.add(sph(mc('#111'), 0.025, 0.025, 0.025, 0.09, 0.04, 0.22)); g.add(sph(mc('#111'), 0.025, 0.025, 0.025, -0.09, 0.04, 0.22));
+  return g;
+}
+function makeDolphin() {
+  const g = new THREE.Group(), m = mc('#7d8fa0', { roughness: 0.35 });
+  g.add(sph(m, 0.35, 0.38, 1.1)); g.add(sph(mc('#dfe6ea'), 0.28, 0.25, 0.9, 0, -0.12, 0.05)); g.add(sph(m, 0.1, 0.1, 0.35, 0, -0.05, 1.2));
+  const fin = mesh(new THREE.ConeGeometry(0.25, 0.5, 3), m, 0.3, 1, 1, 0, 0.45, -0.1); fin.rotation.x = -0.4; g.add(fin);
+  const tail = mesh(CONE4, m, 0.45, 0.4, 0.08, 0, 0, -1.2); tail.rotation.x = -Math.PI / 2; g.add(tail);
+  return g;
+}
+function spawnCritters(biomeId) {
+  const kind = biomeId === 'glacier' && Math.random() < 0.6 ? 'penguin' : Math.random() < 0.18 ? 'dolphin' : 'fish';
+  const n = kind === 'fish' ? randi(3, 6) : randi(2, 3), x0 = rand(6.5, 14), z0 = rand(-55, -25), dir = Math.random() < 0.5 ? 1 : -1;
+  const color = pick(['#9fc3d6', '#ff9a3c', '#ffd24a', '#7fd6c8', '#c9d6e8']);
+  for (let i = 0; i < n; i++) {
+    const m = kind === 'fish' ? makeFish(color) : kind === 'dolphin' ? makeDolphin() : makePenguin();
+    m.scale.setScalar(kind === 'penguin' ? 0.8 : kind === 'fish' ? rand(1.5, 2) : 1);
+    m.rotation.order = 'YXZ'; m.visible = false; scene.add(m);
+    const big = kind !== 'fish';
+    critters.push({ m, x: x0 + rand(-0.8, 0.8), z: z0 - i * (big ? 2.6 : 1.1), delay: i * (big ? 0.35 : 0.16), t: 0, dur: big ? 1.3 : rand(0.7, 0.95), h: big ? 2.4 : rand(1, 1.8), dx: dir * rand(1.5, 3), dz: rand(-6, -2), size: big ? 0.45 : 0.25, penguin: kind === 'penguin' });
+  }
+}
+function updateCritters(dt, dz, t, biomeId) {
+  G.nextCritter -= dt;
+  if (G.nextCritter <= 0 && G.state !== 'loading') { spawnCritters(biomeId); G.nextCritter = rand(2.2, 5); }
+  for (let i = critters.length - 1; i >= 0; i--) {
+    const c = critters[i]; c.z += dz; c.t += dt;
+    if (c.t < c.delay) continue;
+    const k = (c.t - c.delay) / c.dur;
+    if (!c.m.visible) { c.m.visible = true; burst(c.x, 0.2, c.z, 10, { spread: 1, up: 3, life: 0.6, size: c.size }); }
+    c.x += c.dx * dt; c.z += c.dz * dt;
+    c.m.position.set(c.x, waveH(c.x, c.z - G.dist, G.t) - 0.3 + c.h * Math.sin(Math.PI * Math.min(k, 1)), c.z);
+    c.m.rotation.set(c.penguin ? -0.6 - Math.cos(Math.PI * k) * 0.5 : -Math.cos(Math.PI * k) * 0.9, Math.atan2(c.dx, c.dz), c.penguin ? 0 : Math.sin(t * 20) * 0.15);
+    if (k >= 1) { burst(c.x, 0.2, c.z, 12, { spread: 1.2, up: 3, life: 0.6, size: c.size }); scene.remove(c.m); critters.splice(i, 1); }
+    else if (c.z > 20) { scene.remove(c.m); critters.splice(i, 1); }
+  }
+}
+
 function update(rawDt) {
   const dt = rawDt * G.slowmo;
   G.t += rawDt;
@@ -2292,11 +2462,12 @@ function update(rawDt) {
   waterUniforms.uTime.value = t; waterUniforms.uDist.value = G.dist; skyMat.uniforms.uTime.value = t;
   applyTOD(G.state === 'title' ? 0 : (G.runDist / TOD_LEN) % 1);
 
+
   // biome name + skylines
   const cur = biomeAt(G.runDist);
   const inField = G.mode === 'field';
   if (playing && !inField && cur !== G.biome) { G.biome = cur; notice(BIOMES[cur].name); }
-  skylines.forEach((s, i) => { const u = s.userData; u.o = damp(u.o, i === cur && !inField ? 1 : 0, 0.9, rawDt); s.visible = u.o > 0.01; u.near.opacity = u.far.opacity = u.o; });
+  skylines.forEach((s, i) => { const u = s.userData; u.o = damp(u.o, i === cur && !inField ? 1 : 0, 0.9, rawDt); s.visible = u.o > 0.01; u.near.opacity = u.far.opacity = u.o; for (const [m, k] of u.extra || []) m.opacity = u.o * k * (0.8 + 0.2 * Math.sin(t * 3)); });
   kuban.visible = inField;
   for (const sc of scenery) sc.visible = !inField;
 
@@ -2345,8 +2516,8 @@ function update(rawDt) {
       G.husky -= dt; player.h = Math.sin(Math.PI * clamp(1 - G.husky / HUSKY_T, 0, 1)) * HUSKY_H;
       if (G.husky <= 0) { endHusky(); player.h = 0.2; player.air = true; player.vy = -3; player.invuln = Math.max(player.invuln, 1.3); }
     } else if (player.air) {
-      player.jumpT += dt; player.h += player.vy * dt; player.vy -= 30 * dt;
-      if (player.h <= 0) { player.h = 0; player.air = false; player.trick = 0; Sound.land(); burst(player.x, 0.2, 0.3, 26, { spread: 2.2, up: 4.5, life: 0.7, size: 0.28 }); }
+      player.jumpT += dt; player.h += player.vy * dt; player.vy -= player.grav * dt; player.jumpBuf = Math.max(0, player.jumpBuf - dt);
+      if (player.h <= 0) { player.h = 0; player.air = false; player.trick = 0; Sound.land(); burst(player.x, 0.2, 0.3, 26, { spread: 2.2, up: 4.5, life: 0.7, size: 0.28 }); if (player.jumpBuf > 0) jump(); }
     }
     player.duckT = Math.max(0, player.duckT - dt);
     player.invuln = Math.max(0, player.invuln - dt);
@@ -2374,7 +2545,7 @@ function update(rawDt) {
       if (FIELD.inside) sitOlya(t);
       else runOlya(sk > 0.05 ? G.runPh : 0, Math.max(sk, 0.08), Math.sin(Math.min(1, G.punch) * Math.PI));
     } else poseOlya(t, player.duck * (G.husky > 0 ? 0.85 : 1), player.air || G.fly > 0 ? 1 : 0, player.carve, clamp((G.speed - 8) / 26, 0, 1) + (player.air || flying() ? 0.3 : 0));
-    if (player.trick) olya.model.rotation.y = player.trick * Math.PI * 2 * clamp(player.jumpT / 0.68, 0, 1);
+    if (player.trick) olya.model.rotation.y = player.trick * Math.PI * 2 * clamp(player.jumpT / (player.airT * 0.96), 0, 1);
     else olya.model.rotation.y = damp(olya.model.rotation.y, 0, 10, dt);
     if (rideHusky.visible) animHusky(rideHusky, t, true);
     if (jet.visible) { jetStream.scale.y = 1.4 + Math.sin(t * 40) * 0.2; jetStream.position.y = -0.4 - jetStream.scale.y / 2; }
@@ -2508,7 +2679,7 @@ function update(rawDt) {
         if (k >= 1) { e.phase = 'gone'; burst(e.x, 0.3, e.z, 30, { spread: 2, up: 5, life: 0.8, size: 0.35 }); }
       } else e.mesh.position.y = -6;
       e.mesh.userData.tail.rotation.y = Math.sin(t * 10 + e.seed) * 0.35;
-      if (playing && e.yMax > 0 && collides(e, prevZ)) hitObstacle(e);
+      if (playing && !e.dead && e.yMax > 0 && collides(e, prevZ)) hitObstacle(e);
     } else if (e.kind === 'wish') {
       e.mesh.position.y = 0.8 + wy + Math.sin(t * 2.2 + e.seed) * 0.05;
       e.mesh.children[0].rotation.y = Math.sin(t * 1.5 + e.seed) * 0.15;
@@ -2542,6 +2713,9 @@ function update(rawDt) {
   }
   updateScenery(dz);
   updateCameos(dt, t, dz);
+  const biomeId = BIOMES[cur].id;
+  if (G.mode !== 'field') updateCritters(dt, dz, t, biomeId);
+  if (biomeId === 'glacier' && G.mode !== 'field' && (playing || G.state === 'title')) for (let i = 0; i < 2; i++) emit(rand(-10, 14), rand(5, 10), rand(-45, 6), rand(-0.3, 0.3), -rand(0.8, 1.8), 0, 4, rand(0.06, 0.12), '#ffffff', 0, 1);
 
   if (playing && G.mode !== 'field') {
     G.scoreF += dz * 0.5 * (G.boost > 0 ? 2 : 1);
@@ -2580,13 +2754,21 @@ function hitObstacle(e) {
   if (switching) {
     player.lane = player.prevLane; player.invuln = 0.7; G.shake = 0.5; Sound.bump();
     burst(player.x, 1.0, 0, 20, { spread: 2, up: 4, life: 0.6, size: 0.3 });
-    if (G.stumbleT > 0) { wipeout(e); return; }
+    if (G.stumbleT > 0) { loseLife(e); return; }
     G.stumbleT = 5;
     floatText('Ой!', player.x, 2.2, 0);
     return;
   }
-  wipeout(e);
+  loseLife(e);
 }
+function loseLife(e) {
+  G.lives--;
+  if (G.lives <= 0) { wipeout(e); return; }
+  e.dead = true; player.invuln = 2.2; player.duckT = 0.35; G.speed *= 0.8; G.shake = 0.8; G.stumbleT = 0; flash(); Sound.bump();
+  burst(e.x, 1.2, e.z, 45, { spread: 3.5, up: 6, life: 0.9, size: 0.32, colors: ['#ffffff', '#ff8aa8', '#ff4f7b'] });
+  floatText('💔', player.x, player.h + 2.2, 0, 'smash');
+}
+
 function collectMelon(e) {
   if (G.t - G.lastMelonT > 0.7) G.streak = 0;
   G.lastMelonT = G.t; Sound.melon(G.streak++);

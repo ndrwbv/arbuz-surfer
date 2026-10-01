@@ -14,7 +14,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Manrope:wght@500;600;700;800&family=Unbounded:wght@700;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v=6f0d6a4b">
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"}}</script>
 </head>
 <body>
@@ -74,35 +74,62 @@
 </section>
 
 <section id="over" class="screen" hidden>
-  <div class="over-card">
-    <div class="over-photo"><img id="overPhoto" src="img/olya-beanie.jpg" alt="Оля"></div>
-    <div class="over-body">
-      <div class="over-k">Wipeout!</div>
-      <h2 id="overTitle">Паша дописался</h2>
-      <div class="over-msg" id="overMsg"></div>
-      <div class="stats">
-        <div><span>очки</span><b id="overScore">0</b></div>
-        <div><span>арбузы</span><b id="overMelons">0</b></div>
-        <div><span>рекорд</span><b id="overBest">0</b></div>
+  <div class="go-card" id="goCard">
+    <div class="go-dots" id="goDots"><i></i><i></i><i></i><i></i></div>
+
+    <div class="go-step" data-step="result">
+      <div class="go-photo"><img id="overPhoto" src="img/olya-beanie.jpg" alt="Оля"></div>
+      <div class="go-body">
+        <div class="over-k">Wipeout!</div>
+        <h2 id="overTitle">Паша дописался</h2>
+        <div class="over-msg" id="overMsg"></div>
+        <div class="go-score"><b id="overScore">0</b><span>очков</span></div>
+        <div class="go-mini"><span>🍉 <b id="overMelons">0</b></span><span>рекорд <b id="overBest">0</b></span><span class="record" id="newRecord" hidden>новый рекорд! 🎉</span></div>
+        <div class="rank"><span class="rank-e" id="rankEmoji">🫧</span><div><b id="rankName">Пенка</b><small id="rankNext"></small></div></div>
+        <div class="btns"><button class="btn primary" id="goNext">Дальше →</button><button class="btn ghost" id="btnAgain">Ещё волну 🌊</button></div>
       </div>
-      <div class="record" id="newRecord" hidden>Новый рекорд! 🎉</div>
-      <div class="rank"><span class="rank-e" id="rankEmoji">🫧</span><div><b id="rankName">Пенка</b><small id="rankNext"></small></div></div>
-      <div class="online" id="onlineBox" hidden>
-        <label class="name-row"><span>Имя для рейтинга</span><input id="nameInput" maxlength="24" placeholder="Как тебя зовут?" autocomplete="nickname"></label>
-        <form id="wishForm" class="wish">
-          <textarea id="wishText" maxlength="160" rows="2" placeholder="Пожелание Оле — она найдёт его в подарке 🎁"></textarea>
-          <button class="btn ghost" type="submit">Отправить 💌</button>
+    </div>
+
+    <div class="go-step" data-step="name" hidden>
+      <div class="go-body">
+        <div class="go-emoji">👋</div>
+        <h2>Как тебя зовут?</h2>
+        <p class="go-p">Имя появится в рейтинге и под твоим пожеланием Оле</p>
+        <form id="nameForm" class="go-form">
+          <input id="nameInput" maxlength="24" placeholder="Имя" autocomplete="nickname" enterkeyhint="next">
+          <button class="btn primary" type="submit">Дальше →</button>
         </form>
-        <div class="wish-done" id="wishDone" hidden>Спасибо! Оля найдёт его в подарке 🎁</div>
-        <div class="wish-err" id="wishErr" hidden>Не отправилось — попробуй ещё раз</div>
       </div>
-      <div class="leaders-t" id="leadersTitle">Рейтинг</div>
-      <ol class="leaders" id="leaders"></ol>
-      <div class="btns">
-        <button class="btn primary" id="btnAgain">Ещё волну 🌊</button>
-        <button class="btn ghost" id="btnShare">Похвастаться</button>
-        <button class="btn ghost" id="btnCard2">Открытка 💌</button>
-        <button class="btn field" id="btnField2">Бахча пожеланий 🍉</button>
+    </div>
+
+    <div class="go-step" data-step="wish" hidden>
+      <div class="go-body">
+        <div class="go-emoji">💌</div>
+        <h2>Пожелание Оле</h2>
+        <p class="go-p">Оля найдёт его в подарке 🎁 прямо в игре</p>
+        <form id="wishForm" class="go-form col">
+          <textarea id="wishText" maxlength="160" rows="4" placeholder="Оля, желаю…"></textarea>
+          <div class="go-count"><span id="wishCount">0</span>/160</div>
+          <div class="wish-err" id="wishErr" hidden>Не отправилось — попробуй ещё раз</div>
+          <div class="btns"><button class="btn primary" type="submit" id="wishSend">Отправить 💌</button><button class="btn ghost" type="button" id="wishSkip">Пропустить</button></div>
+        </form>
+      </div>
+    </div>
+
+    <div class="go-step" data-step="board" hidden>
+      <div class="go-body">
+        <div class="go-cols">
+          <div class="go-col">
+            <div class="go-h">🏆 Рейтинг</div>
+            <ol class="leaders" id="leaders"></ol>
+          </div>
+          <div class="go-col">
+            <div class="go-h">💌 Что пожелали Оле <span id="wishesCount"></span></div>
+            <ul class="go-wishes" id="wishesList"></ul>
+          </div>
+        </div>
+        <div class="go-me" id="goMe"></div>
+        <div class="btns"><button class="btn primary" id="btnAgain2">Ещё волну 🌊</button><button class="btn ghost" id="btnShare">Похвастаться</button><button class="btn ghost" id="btnCard2">Открытка 💌</button><button class="btn field" id="btnField2">Бахча пожеланий 🍉</button></div>
       </div>
     </div>
   </div>
@@ -142,7 +169,7 @@
 
 <div id="loading"><div class="spin">🍉</div><div>Ловим волну…</div></div>
 
-<script src="js/config.js"></script>
-<script type="module" src="js/game.js"></script>
+<script src="js/config.js?v=6f0d6a4b"></script>
+<script type="module" src="js/game.js?v=6f0d6a4b"></script>
 </body>
 </html>
