@@ -1346,7 +1346,7 @@ const rideHusky = makeHusky(); rideHusky.visible = false; olya.model.add(rideHus
 // ───────────────────────── DOM / UI
 const ui = {
   hud: $('hud'), score: $('score'), melons: $('melons'), boost: $('boost'), boostBar: $('boostBar'), boostLabel: $('boostLabel'), toast: $('toast'), toastWish: $('toastWish'), toastFrom: $('toastFrom'),
-  speedo: $('speedo'), lives: $('lives'), title: $('title'), over: $('over'), pause: $('pause'), card: $('card'), floats: $('floats'), flash: $('flash'), notice: $('notice'),
+  speedo: $('speedo'), title: $('title'), over: $('over'), pause: $('pause'), card: $('card'), floats: $('floats'), flash: $('flash'), notice: $('notice'),
 };
 const floats = [];
 const _p = new THREE.Vector3();
@@ -1421,7 +1421,6 @@ function startRun() {
   Sound.init();
   clearEntities(); clearCameos(); resetRide();
   Object.assign(G, { state: 'play', run: 0, runDist: 0, speed: 15, score: 0, scoreF: 0, melons: 0, boost: 0, fly: 0, husky: 0, nextRowZ: -55, sincePower: 5, streak: 0, slowmo: 1, stumbleT: 0, biome: -1, nextCameo: rand(10, 14), lastHit: null, speedLvl: 0, lives: START_LIVES });
-  renderLives(false);
   Object.assign(player, { lane: 1, prevLane: 1, h: 0, vy: 0, air: false, duckT: 0, invuln: 0, trick: 0 });
   resetScenery();
   camMode = 'chase';
@@ -1475,7 +1474,7 @@ function startPower(type) {
     Sound.coffee(); notice('☕ Летим на кофейной тяге!');
     for (let z = -12; z > -200; z -= 2.6) addMelon([1, 0, 1, 2][Math.floor(-z / 24) % 4], z, FLY_H + 0.9);
   } else if (type === 'heart') {
-    G.lives = Math.min(MAX_LIVES, G.lives + 1); renderLives(true); Sound.chime(); notice('❤️ +1 жизнь');
+    G.lives = Math.min(MAX_LIVES, G.lives + 1); Sound.chime(); floatText('❤️', player.x, player.h + 2.2, 0, 'smash');
     burst(player.x, player.h + 1.2, 0, 40, { spread: 3, up: 5, life: 1, size: 0.25, colors: ['#ff4f7b', '#ff8aa8', '#ffffff'], grav: 6, scroll: 0 });
   } else if (type === 'husky') {
     G.husky = HUSKY_T; G.speed *= 1.6; player.air = false; player.trick = 0;
@@ -1792,17 +1791,13 @@ function hitObstacle(e) {
   loseLife(e);
 }
 function loseLife(e) {
-  G.lives--; renderLives(true);
+  G.lives--;
   if (G.lives <= 0) { wipeout(e); return; }
   e.dead = true; player.invuln = 2.2; player.duckT = 0.35; G.speed *= 0.8; G.shake = 0.8; G.stumbleT = 0; flash(); Sound.bump();
   burst(e.x, 1.2, e.z, 45, { spread: 3.5, up: 6, life: 0.9, size: 0.32, colors: ['#ffffff', '#ff8aa8', '#ff4f7b'] });
   floatText('💔', player.x, player.h + 2.2, 0, 'smash');
-  notice(G.lives === 1 ? '💔 Последняя жизнь — аккуратнее!' : `💔 Осталось жизней: ${G.lives}`);
 }
-function renderLives(bump) {
-  const el = ui.lives; el.textContent = '❤️'.repeat(Math.max(0, G.lives)) + '🤍'.repeat(Math.max(0, START_LIVES - G.lives));
-  if (bump) { el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); }
-}
+
 function collectMelon(e) {
   if (G.t - G.lastMelonT > 0.7) G.streak = 0;
   G.lastMelonT = G.t; Sound.melon(G.streak++);
