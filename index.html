@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Arbuz Surfer — с днём рождения, Оля!</title>
+<meta name="description" content="Оля ловит волну, уворачивается от сообщений Паши Притчина и собирает арбузы. С днём рождения!">
+<meta property="og:title" content="Arbuz Surfer 🍉🏄‍♀️">
+<meta property="og:description" content="Оля ловит волну, уворачивается от сообщений Паши Притчина и собирает арбузы. С днём рождения!">
+<meta property="og:image" content="https://ndrwbv.github.io/arbuz-surfer/img/og.jpg">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#f6b98f">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='88'>🍉</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Manrope:wght@500;600;700;800&family=Unbounded:wght@700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js"}}</script>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="grain"></div>
+<div class="vignette"></div>
+<div id="flash"></div>
+
+<div id="hud" hidden>
+  <div class="hud-l">
+    <div class="score" id="score">0</div>
+    <div class="melons">🍉 <span id="melons">0</span></div>
+  </div>
+  <div class="boost" id="boost" hidden>
+    <span>🎂 буст ×2</span>
+    <i><b id="boostBar"></b></i>
+  </div>
+  <div class="hud-r">
+    <button class="icon" id="btnSound" aria-label="Звук">🔊</button>
+    <button class="icon" id="btnPause" aria-label="Пауза">⏸</button>
+  </div>
+</div>
+
+<div id="floats"></div>
+
+<div id="toast" hidden>
+  <div class="toast-k">🎉 буст!</div>
+  <div class="toast-t">С днём рождения, Оля!</div>
+  <div class="toast-w" id="toastWish"></div>
+</div>
+
+<section id="title" class="screen">
+  <div class="title-wrap">
+    <div class="polaroids">
+      <figure class="pol p1"><img src="img/olya-denim.jpg" alt="Оля"><figcaption>Оля</figcaption></figure>
+      <figure class="pol p2"><img src="img/olya-surf.jpg" alt="Оля на волне"><figcaption>ловит волну</figcaption></figure>
+    </div>
+    <div class="title-text">
+      <div class="kicker">🎂 С днём рождения, Оля!</div>
+      <h1>Arbuz<br>Surfer</h1>
+      <p class="lead">Катись по волне, уворачивайся от сообщений Паши&nbsp;Притчина, собирай арбузы 🍉 и лови поздравления — они бустят.</p>
+      <div class="btns">
+        <button class="btn primary" id="btnPlay">Поехали 🏄‍♀️</button>
+        <button class="btn ghost" id="btnCard1">Открытка 💌</button>
+      </div>
+      <div class="controls">
+        <span class="desk"><kbd>←</kbd><kbd>→</kbd> линия · <kbd>↑</kbd> прыжок · <kbd>↓</kbd> нырок</span>
+        <span class="mob">свайп ← → линия · ↑ прыжок · ↓ нырок</span>
+      </div>
+      <div class="best">Рекорд: <b id="bestTitle">0</b></div>
+    </div>
+  </div>
+</section>
+
+<section id="over" class="screen" hidden>
+  <div class="over-card">
+    <div class="over-photo"><img id="overPhoto" src="img/olya-beanie.jpg" alt="Оля"></div>
+    <div class="over-body">
+      <div class="over-k">Wipeout!</div>
+      <h2 id="overTitle">Паша дописался</h2>
+      <div class="over-msg" id="overMsg"></div>
+      <div class="stats">
+        <div><span>очки</span><b id="overScore">0</b></div>
+        <div><span>арбузы</span><b id="overMelons">0</b></div>
+        <div><span>рекорд</span><b id="overBest">0</b></div>
+      </div>
+      <div class="record" id="newRecord" hidden>Новый рекорд! 🎉</div>
+      <div class="rank"><span class="rank-e" id="rankEmoji">🫧</span><div><b id="rankName">Пенка</b><small id="rankNext"></small></div></div>
+      <ol class="leaders" id="leaders"></ol>
+      <div class="btns">
+        <button class="btn primary" id="btnAgain">Ещё волну 🌊</button>
+        <button class="btn ghost" id="btnShare">Похвастаться</button>
+        <button class="btn ghost" id="btnCard2">Открытка 💌</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="pause" class="screen" hidden>
+  <div class="pause-card">
+    <h2>Пауза</h2>
+    <p>Волна подождёт. Паша — вряд ли.</p>
+    <button class="btn primary" id="btnResume">Дальше 🏄‍♀️</button>
+  </div>
+</section>
+
+<section id="card" class="screen" hidden>
+  <div class="card-wrap">
+    <button class="icon close" id="btnCloseCard" aria-label="Закрыть">✕</button>
+    <div class="card-photos">
+      <figure class="pol c1"><img src="img/olya-denim.jpg" alt=""><figcaption>ветер в дредах</figcaption></figure>
+      <figure class="pol c2"><img src="img/olya-selfie.jpg" alt=""><figcaption>улыбка 10/10</figcaption></figure>
+      <figure class="pol c3"><img src="img/olya-surf.jpg" alt=""><figcaption>та самая волна</figcaption></figure>
+      <figure class="pol c4"><img src="img/olya-texaco.jpg" alt=""><figcaption>Марокко</figcaption></figure>
+      <figure class="pol c5"><img src="img/olya-beanie.jpg" alt=""><figcaption>чай у воды</figcaption></figure>
+      <figure class="pol c6"><img src="img/olya-sunset.jpg" alt=""><figcaption>закаты</figcaption></figure>
+      <figure class="pol c7"><img src="img/olya-braid.jpg" alt=""><figcaption>💛</figcaption></figure>
+    </div>
+    <div class="card-text">
+      <div class="kicker">открытка · 🎂</div>
+      <h2>Оля, с днём рождения!</h2>
+      <p>Пусть жизнь будет как идеальный сет: длинные чистые волны, тёплый океан и закат, от которого невозможно оторваться.</p>
+      <p>Больше дорог, вэнов с досками, дюн, верблюдов и арбузов — и чтобы все сообщения были только приятными 😉</p>
+      <button class="btn primary" id="btnCardPlay">Кататься 🏄‍♀️</button>
+    </div>
+  </div>
+</section>
+
+<div id="loading"><div class="spin">🍉</div><div>Ловим волну…</div></div>
+
+<script type="module" src="js/game.js"></script>
+</body>
+</html>
