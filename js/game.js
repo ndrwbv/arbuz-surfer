@@ -858,7 +858,7 @@ const PAL = {
   dawn: { horizon: '#fbd3c4', mid: '#d7b9dd', top: '#7b8fcc', glow: '#ffb0a0', disc: '#fff3e6', cloud: '#ffd0d8', glowAmt: 0.8, night: 0, elev: 0.04,
     deep: '#124a5e', shallow: '#2a96a0', wall: '#74dccf', refl: '#f2c6c6', sunCol: '#ffe1cc', hemiSky: '#ffe2e0', hemiGround: '#2e6f80', hemiI: 1.2, sun: '#ffc4b0', sunI: 2.0, fillI: 1.1 },
   day: { horizon: '#d4ecf5', mid: '#a6d2ef', top: '#4a8fdc', glow: '#fff2c0', disc: '#fffef4', cloud: '#ffffff', glowAmt: 0.5, night: 0, elev: 0.45,
-    deep: '#0a4d6a', shallow: '#1aa3b0', wall: '#6fe6d8', refl: '#a9cfe2', sunCol: '#cfc6ae', hemiSky: '#e8f4ff', hemiGround: '#2f7f8c', hemiI: 1.3, sun: '#fff1d6', sunI: 2.6, fillI: 1.1 },
+    deep: '#0a4d6a', shallow: '#1aa3b0', wall: '#6fe6d8', refl: '#9cc6dc', sunCol: '#a39b88', hemiSky: '#e8f4ff', hemiGround: '#2f7f8c', hemiI: 1.3, sun: '#fff1d6', sunI: 2.6, fillI: 1.1 },
 };
 const TOD = Object.fromEntries(Object.entries(PAL).map(([k, p]) => [k, Object.fromEntries(Object.entries(p).map(([f, v]) => [f, typeof v === 'string' ? new THREE.Color(v) : v]))]));
 const CUR = Object.fromEntries(Object.entries(TOD.sunset).map(([f, v]) => [f, v.isColor ? v.clone() : v]));
@@ -957,6 +957,7 @@ const Sound = {
   hello() { const t = this.now(); [659.25, 830.6, 987.8].forEach((f, i) => this.tone(f, t + i * 0.09, 0.3, 'triangle', 0.09)); },
   chime() { const t = this.now(); [1318.5, 1568, 1975.5, 2637].forEach((f, i) => this.tone(f, t + i * 0.07, 0.5, 'sine', 0.05)); },
   bump() { const t = this.now(); this.tone(180, t, 0.2, 'sine', 0.3, this.master, 0, 70); this.noise(t, 0.2, 'lowpass', 1200, 200, 0.25, this.master, this.brown); },
+  sizzle() { this.noise(this.now(), 0.8, 'highpass', 2500, 6000, 0.14); },
   crash() { const t = this.now(); this.noise(t, 1.1, 'lowpass', 1500, 120, 0.6, this.master, this.brown); this.tone(330, t, 0.7, 'sawtooth', 0.08, this.master, 1200, 70); },
   birthday() { // Happy Birthday, first phrase (traditional melody)
     const t0 = this.now() + 0.02, b = 0.2, notes = [[440, 0.75], [440, 0.25], [493.88, 1], [440, 1], [587.33, 1], [554.37, 2]];
@@ -1172,54 +1173,159 @@ function makeCarpet() {
   g.userData = { geo, base: geo.attributes.position.array.slice(), sp, bowl: new THREE.Vector3(0, 1.08, -0.45), mouth: new THREE.Vector3(0.6, 1.0, 0.45), puff: 0 };
   return g;
 }
+// Every visit is different: lines, arrivals and behaviour are drawn from decks that don't repeat
+// until everything was shown (persisted across runs).
+const FEDOR_LINES = [
+  'Оля, привет! 👋', 'С днём рождения, Оль! 🎂', 'Классно катаешь! 🤙', 'Привет из Сыктывкара! 👋', 'Как тебе мой оранжевый борд? 🧡',
+  'Держи волну, я догоню', 'Оль, пиццу будешь? 🍕', 'Красиво идёшь!', 'Всё по плану? 😉', 'Ну я в тундру, пока',
+  'А помнишь, как на скейтах катались…',
+];
+const CARPET_LINES = [
+  'С днюхой, Оля! 💨', 'Оля, залетай на кальян! 💨', 'Мы проездом, на минутку 🧞', 'Сверху видно лучше! 👀', 'Оль, ты огонь! 🔥',
+  'Летим в Томск, что привезти?', 'Не отвлекайся, там Паша!', 'Желаем попутной волны! 🌊', 'Угли кончаются, полетели за новыми', 'Курим за твоё здоровье 😅',
+];
+const FEDOR_ARRIVE = ['behind', 'ahead', 'lip'], FEDOR_ACT = ['ride', 'overtake', 'jump', 'wipeout'];
+const CARPET_ARRIVE = ['swoop', 'behind', 'spiral', 'drop'], CARPET_ACT = ['calm', 'fall', 'loop', 'embers'], CARPET_EXIT = ['up', 'zoom', 'back'];
+function draw(key, arr) {
+  let d = store.get('deck.' + key, null);
+  if (!Array.isArray(d) || !d.length || d.some((i) => i >= arr.length)) d = [...arr.keys()].sort(() => Math.random() - 0.5);
+  const i = d.shift(); store.set('deck.' + key, d);
+  return arr[i];
+}
+const bounceOut = (k) => { const n = 7.5625, d = 2.75; if (k < 1 / d) return n * k * k; if (k < 2 / d) return n * (k -= 1.5 / d) * k + 0.75; if (k < 2.5 / d) return n * (k -= 2.25 / d) * k + 0.9375; return n * (k -= 2.625 / d) * k + 0.984375; };
+function disposeSprites(g) { g.traverse((o) => { if (o.isSprite) { o.material.map.dispose(); o.material.dispose(); } }); }
+function swapSpeech(c, title, sub, y) { c.sp.visible = false; const s = makeSpeech(title, sub); s.position.set(0, y, 0); c.g.add(s); c.sp = s; }
+
 function spawnFedor() {
-  const g = new THREE.Group(); g.add(makeBoard(mc('#ff6a13', { roughness: 0.35 })));
+  const g = new THREE.Group(), board = makeBoard(mc('#ff6a13', { roughness: 0.35 })); g.add(board);
   const p = makePerson({ shirt: '#f4f4f2', pants: '#2a3550', hair: '#5a4330', skin: '#e7b493' }); p.position.y = 0.1; p.rotation.y = -0.55; g.add(p);
-  const sp = makeSpeech('Оля, привет! 👋', '— Фёдор Овчинников'); sp.position.set(0, 2.9, 0); sp.visible = false; g.add(sp);
+  const line = draw('fedorLine', FEDOR_LINES);
+  const act = line.startsWith('Ну я в тундру') ? 'tundra' : line.includes('скейт') ? 'kickflip' : draw('fedorAct', FEDOR_ACT);
+  const sp = makeSpeech(line, '— Фёдор Овчинников'); sp.position.set(0, 2.9, 0); sp.visible = false; g.add(sp);
   const portrait = camera.aspect < 0.9;
-  g.position.set(9, 0, 16); scene.add(g);
-  cameos.push({ kind: 'fedor', g, p, sp, t: 0, x: portrait ? 3.7 : 5.6, zt: portrait ? -6 : -2 });
+  g.position.set(9, -6, 16); scene.add(g);
+  cameos.push({ kind: 'fedor', g, p, board, sp, t: 0, x: portrait ? 3.7 : 5.6, zt: portrait ? -6 : -2, line, act, arrive: draw('fedorArrive', FEDOR_ARRIVE), A: 1.5, M: act === 'overtake' ? 3.4 : 4.6 });
 }
 function spawnCarpet() {
   const g = makeCarpet(); g.scale.setScalar(1.4); scene.add(g);
   const portrait = camera.aspect < 0.9;
-  cameos.push({ kind: 'carpet', g, t: 0, p0: new THREE.Vector3(40, 16, -80), p1: new THREE.Vector3(portrait ? 1.6 : 5.0, portrait ? 7.6 : 6.4, portrait ? -9 : -8), p2: new THREE.Vector3(-40, 22, -100) });
+  const line = draw('carpetLine', CARPET_LINES), act = draw('carpetAct', CARPET_ACT);
+  swapSpeech({ g, sp: g.userData.sp }, line, '— Жанна и Андрей', 2.1);
+  const sp = g.children[g.children.length - 1]; sp.visible = false; g.userData.sp = sp;
+  cameos.push({ kind: 'carpet', g, t: 0, A: 2.8, H: 6.8, line, act, arrive: draw('carpetArrive', CARPET_ARRIVE), exit: draw('carpetExit', CARPET_EXIT),
+    embersOn: act === 'embers' || Math.random() < 0.3, emberAt: rand(1.2, 3.5), embers: [],
+    p1: new THREE.Vector3(portrait ? 1.6 : 5.0, portrait ? 7.6 : 6.4, portrait ? -9 : -8) });
 }
-const _w = new THREE.Vector3();
-function updateCameos(dt, t) {
-  for (let i = cameos.length - 1; i >= 0; i--) {
-    const c = cameos[i]; c.t += dt;
-    if (c.kind === 'fedor') {
-      let z;
-      if (c.t < 1.4) z = lerp(16, c.zt, easeOut(c.t / 1.4)); else if (c.t < 6) z = c.zt + Math.sin(c.t * 1.3) * 0.4; else z = c.zt - Math.pow(c.t - 6, 2) * 16;
-      c.g.position.set(c.x, waveH(c.x, z - G.dist, G.t), z);
-      c.g.rotation.z = Math.sin(t * 1.6) * 0.05;
-      const waving = c.t > 1.2 && c.t < 6;
-      if (c.t > 1.2 && !c.said) { c.said = true; c.sp.visible = true; Sound.hello(); notice('👋 Фёдор Овчинников передаёт привет'); }
-      if (c.t > 5.6) c.sp.visible = false;
-      c.p.userData.armB.rotation.z = waving ? 2.55 + Math.sin(t * 12) * 0.4 : 0.2;
-      if (Math.random() < 0.7) emit(c.x + rand(-0.3, 0.3), c.g.position.y + 0.1, z + 1.2, rand(-1, 1), rand(1, 3), rand(0.5, 2), 0.5, rand(0.15, 0.3), '#ffffff');
-      if (c.t > 8.5) { scene.remove(c.g); cameos.splice(i, 1); }
-    } else if (c.kind === 'carpet') {
-      const g = c.g, u = g.userData;
-      if (c.t < 2.8) g.position.lerpVectors(c.p0, c.p1, easeOut(c.t / 2.8));
-      else if (c.t < 9.5) g.position.copy(c.p1);
-      else g.position.lerpVectors(c.p1, c.p2, easeIn((c.t - 9.5) / 3));
-      g.position.y += Math.sin(t * 1.8) * 0.18;
-      g.rotation.set(Math.sin(t * 1.3) * 0.05, -0.3 + Math.sin(t * 0.7) * 0.08, c.t < 2.8 ? 0.15 * (1 - c.t / 2.8) : c.t > 9.5 ? -0.2 : Math.sin(t * 1.1) * 0.04);
-      const pos = u.geo.attributes.position;
-      for (let k = 0; k < pos.count; k++) { const x = u.base[k * 3], z = u.base[k * 3 + 2]; pos.setY(k, Math.sin(x * 2.2 + t * 5) * 0.05 + Math.sin(z * 2.8 + t * 3.3) * 0.03); }
-      pos.needsUpdate = true;
-      if (c.t > 2.6 && !c.said) { c.said = true; u.sp.visible = true; Sound.chime(); notice('🧞 Жанна и Андрей прилетели на ковре-самолёте'); }
-      if (c.t > 9.4) u.sp.visible = false;
-      if (Math.random() < 0.4) { _w.copy(u.bowl); g.localToWorld(_w); emit(_w.x, _w.y, _w.z, rand(-0.2, 0.2), rand(0.4, 0.9), rand(0.2, 0.8), 1.6, rand(0.25, 0.45), '#efeaf3', -0.5, 0); }
-      u.puff -= dt;
-      if (u.puff <= 0) { u.puff = 1.7; _w.copy(u.mouth); g.localToWorld(_w); for (let k = 0; k < 14; k++) emit(_w.x, _w.y, _w.z, rand(-0.5, 0.5), rand(0.2, 0.9), rand(0.4, 1.6), rand(1.4, 2.2), rand(0.3, 0.6), '#f4f1f7', -0.4, 0); }
-      if (c.t > 12.5) { scene.remove(g); cameos.splice(i, 1); }
+const _w = new THREE.Vector3(), _cp = new THREE.Vector3(), _ca = new THREE.Vector3();
+const emberGeo = new THREE.SphereGeometry(0.07, 8, 6), emberMat = new THREE.MeshBasicMaterial({ color: '#ff7a2a' });
+function updateFedor(c, dt, t, dz) {
+  const A = c.A, E = A + c.M; let x = c.x, z = c.zt, y = 0;
+  if (c.fell) {
+    c.fz += dz; c.fallT += dt; z = c.fz;
+    c.p.rotation.x = Math.min(c.fallT * 4, Math.PI / 2); c.p.position.y = 0.1 - Math.min(c.fallT, 0.5);
+    c.board.rotation.z = Math.min(c.fallT * 6, Math.PI); c.board.position.x = Math.min(c.fallT, 0.6);
+    if (c.fallT > 1.6) c.sp.visible = false;
+    c.g.position.set(x, waveH(x, z - G.dist, G.t) - Math.min(c.fallT * 0.2, 0.3), z);
+    return z > 22;
+  }
+  if (c.t < A) {
+    const k = c.t / A;
+    if (c.arrive === 'behind') z = lerp(16, c.zt, easeOut(k));
+    else if (c.arrive === 'ahead') z = lerp(-45, c.zt, easeOut(k));
+    else { // leaps off the crest of the wave
+      x = lerp(-8.5, c.x, k); z = lerp(c.zt - 8, c.zt, k); y = lerp(8.4, 0, k) + Math.sin(Math.PI * k) * 3;
+      c.g.rotation.y = -k * Math.PI * 2;
+      if (k > 0.97 && !c.landed) { c.landed = true; burst(c.x, 0.3, c.zt, 40, { spread: 3, up: 6, life: 0.9, size: 0.4 }); Sound.splash(); }
+    }
+  } else if (c.t < E) {
+    const m = c.t - A;
+    if (!c.said) { c.said = true; c.sp.visible = true; Sound.hello(); notice(c.arrive === 'lip' ? '🌊 Фёдор спрыгнул с гребня волны' : '👋 Фёдор Овчинников рядом'); }
+    if (c.act === 'overtake') z = c.zt - m * 2.6;
+    if ((c.act === 'jump' || c.act === 'kickflip') && m > 1.3 && m < 2.3) {
+      const k = m - 1.3; y = Math.sin(Math.PI * k) * (c.act === 'jump' ? 2.6 : 1.4);
+      if (c.act === 'jump') c.g.rotation.y = k * Math.PI * 2; else c.board.rotation.z = k * Math.PI * 2;
+      if (!c.trickSaid) { c.trickSaid = true; if (c.act === 'jump') notice('🤙 Фёдор крутит 360'); }
+    } else { c.g.rotation.y = damp(c.g.rotation.y % (Math.PI * 2), 0, 10, dt); c.board.rotation.z = 0; }
+    if (c.act === 'wipeout' && m > 3.0) {
+      c.fell = true; c.fallT = 0; c.fz = z;
+      swapSpeech(c, 'Ой! Всё норм 😅', '— Фёдор Овчинников', 2.9);
+      burst(x, 0.4, z, 50, { spread: 3, up: 6, life: 1, size: 0.4 }); Sound.splash(); notice('😅 Фёдор упал, но не сдаётся');
+    }
+    z += Math.sin(c.t * 1.3) * 0.4;
+  } else {
+    const e = c.t - E;
+    if (c.act === 'tundra') {
+      if (!c.gone) { c.gone = true; notice('🏔️ Фёдор уехал в тундру'); }
+      x = c.x + e * 6 + e * e * 8; z = c.zt + e * 3; c.g.rotation.y = -Math.min(e * 2, 1.25);
+      if (e > 1.6) c.sp.visible = false;
+    } else {
+      z = c.zt - (c.act === 'overtake' ? c.M * 2.6 : 0) - e * e * 16;
+      if (e > 0.3) c.sp.visible = false;
     }
   }
+  c.p.userData.armB.rotation.z = c.t > A && c.t < E ? 2.55 + Math.sin(t * 12) * 0.4 : 0.2;
+  c.g.position.set(x, waveH(x, z - G.dist, G.t) + y, z);
+  c.g.rotation.z = Math.sin(t * 1.6) * 0.05;
+  if (y < 0.3 && c.t > 0.2 && Math.random() < 0.7) emit(x + rand(-0.3, 0.3), c.g.position.y + 0.1, z + 1.2, rand(-1, 1), rand(1, 3), rand(0.5, 2), 0.5, rand(0.15, 0.3), '#ffffff');
+  return c.t > E + 3.2;
 }
-function clearCameos() { for (const c of cameos) scene.remove(c.g); cameos.length = 0; }
+function updateCarpet(c, dt, t, dz) {
+  const g = c.g, u = g.userData, A = c.A, E = A + c.H;
+  let roll = 0;
+  if (c.t < A) {
+    const k = c.t / A;
+    if (c.arrive === 'swoop') _cp.lerpVectors(_ca.set(40, 16, -80), c.p1, easeOut(k));
+    else if (c.arrive === 'behind') _cp.lerpVectors(_ca.set(c.p1.x - 1, 13, 26), c.p1, easeOut(k));
+    else if (c.arrive === 'spiral') { const r = (1 - easeOut(k)) * 14, a = k * Math.PI * 4; _cp.set(c.p1.x + Math.cos(a) * r, c.p1.y + (1 - k) * 14, c.p1.z + Math.sin(a) * r - (1 - k) * 10); roll = 0.3 * (1 - k); }
+    else _cp.set(c.p1.x, lerp(c.p1.y + 26, c.p1.y, bounceOut(k)), c.p1.z);
+  } else if (c.t < E) {
+    const m = c.t - A; _cp.copy(c.p1);
+    if (!c.said) { c.said = true; u.sp.visible = true; Sound.chime(); notice(`🧞 Жанна и Андрей ${pick(['прилетели на ковре-самолёте', 'заглянули на огонёк', 'пролетают мимо', 'спустились с облаков'])}`); }
+    if (c.act === 'fall' && m > 1.4 && m < 4.4) {
+      const f = (m - 1.4) / 3; _cp.y = lerp(c.p1.y, 1.3, Math.sin(Math.PI * f)); roll = Math.sin(m * 12) * 0.3 * (1 - f);
+      if (!c.dipped && f > 0.15) { c.dipped = true; notice('😱 Ковёр теряет высоту!'); Sound.splash(); }
+      if (!c.splashed && f > 0.45) { c.splashed = true; swapSpeech({ g, sp: u.sp }, 'Мы в порядке! 😅', '— Жанна и Андрей', 2.1); u.sp = g.children[g.children.length - 1]; burst(_cp.x, 0.4, _cp.z, 60, { spread: 3, up: 5, life: 1, size: 0.4, scroll: 0 }); }
+    }
+    if (c.act === 'loop' && m > 2 && m < 3.3) { roll = ((m - 2) / 1.3) * Math.PI * 2; if (!c.looped) { c.looped = true; notice('🌀 Мёртвая петля на ковре!'); } }
+    if (c.embersOn && !c.embered && m > c.emberAt) {
+      c.embered = true; notice('🔥 У Жанны и Андрея упали угли!');
+      _w.copy(u.bowl); g.localToWorld(_w);
+      for (let k = 0; k < randi(6, 10); k++) { const e = new THREE.Mesh(emberGeo, emberMat); e.position.copy(_w); scene.add(e); c.embers.push({ m: e, v: new THREE.Vector3(rand(-1.2, 1.2), rand(0, 1.5), rand(-0.5, 1.5)) }); }
+    }
+    if (m > c.H - 0.3) u.sp.visible = false;
+  } else {
+    const k = easeIn((c.t - E) / 3);
+    if (c.exit === 'up') _ca.set(-40, 22, -100); else if (c.exit === 'zoom') _ca.set(c.p1.x, c.p1.y + 4, -220); else _ca.set(c.p1.x + 2, 12, 30);
+    _cp.lerpVectors(c.p1, _ca, k);
+    if (c.exit === 'zoom') roll = -0.15;
+  }
+  g.position.copy(_cp); g.position.y += Math.sin(t * 1.8) * 0.18;
+  g.rotation.set(Math.sin(t * 1.3) * 0.05, -0.3 + Math.sin(t * 0.7) * 0.08, roll + Math.sin(t * 1.1) * 0.04);
+  const pos = u.geo.attributes.position;
+  for (let k = 0; k < pos.count; k++) { const bx = u.base[k * 3], bz = u.base[k * 3 + 2]; pos.setY(k, Math.sin(bx * 2.2 + t * 5) * 0.05 + Math.sin(bz * 2.8 + t * 3.3) * 0.03); }
+  pos.needsUpdate = true;
+  if (Math.random() < 0.4) { _w.copy(u.bowl); g.localToWorld(_w); emit(_w.x, _w.y, _w.z, rand(-0.2, 0.2), rand(0.4, 0.9), rand(0.2, 0.8), 1.6, rand(0.25, 0.45), '#efeaf3', -0.5, 0); }
+  u.puff -= dt;
+  if (u.puff <= 0) { u.puff = 1.7; _w.copy(u.mouth); g.localToWorld(_w); for (let k = 0; k < 14; k++) emit(_w.x, _w.y, _w.z, rand(-0.5, 0.5), rand(0.2, 0.9), rand(0.4, 1.6), rand(1.4, 2.2), rand(0.3, 0.6), '#f4f1f7', -0.4, 0); }
+  for (let i = c.embers.length - 1; i >= 0; i--) { // coals fall and hiss in the water
+    const e = c.embers[i]; e.v.y -= 12 * dt; e.m.position.addScaledVector(e.v, dt);
+    if (Math.random() < 0.6) emit(e.m.position.x, e.m.position.y, e.m.position.z, 0, 0.3, 0, 0.3, 0.12, pick(['#ff9a3a', '#ffd06a']), 0, 0);
+    if (e.m.position.y < waveH(e.m.position.x, e.m.position.z - G.dist, G.t)) {
+      burst(e.m.position.x, e.m.position.y + 0.1, e.m.position.z, 8, { spread: 0.6, up: 2, life: 0.9, size: 0.35, colors: ['#f2f2f2', '#dcdcdc'], grav: -1 });
+      if (!c.hissed) { c.hissed = true; Sound.sizzle(); }
+      scene.remove(e.m); c.embers.splice(i, 1);
+    }
+  }
+  return c.t > E + 3 && !c.embers.length;
+}
+function updateCameos(dt, t, dz) {
+  for (let i = cameos.length - 1; i >= 0; i--) {
+    const c = cameos[i]; c.t += dt;
+    const done = c.kind === 'fedor' ? updateFedor(c, dt, t, dz) : updateCarpet(c, dt, t, dz);
+    if (done) { disposeSprites(c.g); scene.remove(c.g); cameos.splice(i, 1); }
+  }
+}
+function clearCameos() { for (const c of cameos) { disposeSprites(c.g); scene.remove(c.g); for (const e of c.embers || []) scene.remove(e.m); } cameos.length = 0; }
 
 // Olya's ride extras: coffee jet under the board, a husky to sit on
 const jet = new THREE.Group(); jet.visible = false; olya.model.add(jet);
@@ -1230,7 +1336,7 @@ const rideHusky = makeHusky(); rideHusky.visible = false; olya.model.add(rideHus
 // ───────────────────────── DOM / UI
 const ui = {
   hud: $('hud'), score: $('score'), melons: $('melons'), boost: $('boost'), boostBar: $('boostBar'), boostLabel: $('boostLabel'), toast: $('toast'), toastWish: $('toastWish'), toastFrom: $('toastFrom'),
-  title: $('title'), over: $('over'), pause: $('pause'), card: $('card'), floats: $('floats'), flash: $('flash'), notice: $('notice'),
+  speedo: $('speedo'), title: $('title'), over: $('over'), pause: $('pause'), card: $('card'), floats: $('floats'), flash: $('flash'), notice: $('notice'),
 };
 const floats = [];
 const _p = new THREE.Vector3();
@@ -1304,7 +1410,7 @@ function resetRide() {
 function startRun() {
   Sound.init();
   clearEntities(); clearCameos(); resetRide();
-  Object.assign(G, { state: 'play', run: 0, runDist: 0, speed: 15, score: 0, scoreF: 0, melons: 0, boost: 0, fly: 0, husky: 0, nextRowZ: -55, sincePower: 5, streak: 0, slowmo: 1, stumbleT: 0, biome: -1, nextCameo: rand(10, 14), lastHit: null });
+  Object.assign(G, { state: 'play', run: 0, runDist: 0, speed: 15, score: 0, scoreF: 0, melons: 0, boost: 0, fly: 0, husky: 0, nextRowZ: -55, sincePower: 5, streak: 0, slowmo: 1, stumbleT: 0, biome: -1, nextCameo: rand(10, 14), lastHit: null, speedLvl: 0 });
   Object.assign(player, { lane: 1, prevLane: 1, h: 0, vy: 0, air: false, duckT: 0, invuln: 0, trick: 0 });
   resetScenery();
   camMode = 'chase';
@@ -1471,7 +1577,7 @@ function update(rawDt) {
 
   if (playing) {
     G.run += dt; G.sincePower += dt;
-    const target = Math.min(15 + G.run * 0.24, 36) * (G.boost > 0 ? 1.3 : 1) * (G.fly > 0 ? 1.25 : 1) * (G.husky > 0 ? 1.6 : 1);
+    const target = Math.min(16 + G.run * 0.32, 48) * (G.boost > 0 ? 1.3 : 1) * (G.fly > 0 ? 1.25 : 1) * (G.husky > 0 ? 1.6 : 1);
     G.speed = damp(G.speed, target, 2, dt);
   } else if (dying) G.speed = damp(G.speed, 0, 2.5, dt);
   else if (G.state !== 'paused') G.speed = damp(G.speed, 11, 1, dt);
@@ -1488,7 +1594,7 @@ function update(rawDt) {
 
   // player
   if (playing) {
-    player.x = damp(player.x, LANES[player.lane], 13, dt);
+    player.x = damp(player.x, LANES[player.lane], 12 + G.speed * 0.12, dt);
     if (G.fly > 0) {
       G.fly -= dt; player.h = damp(player.h, FLY_H + Math.sin(t * 3) * 0.15, 3, dt);
       if (G.fly <= 0) { jet.visible = false; player.air = true; player.vy = 0; player.invuln = Math.max(player.invuln, 1.3); }
@@ -1627,12 +1733,15 @@ function update(rawDt) {
     if (e.z > 14) removeEntity(i);
   }
   updateScenery(dz);
-  updateCameos(dt, t);
+  updateCameos(dt, t, dz);
 
   if (playing) {
     G.scoreF += dz * 0.5 * (G.boost > 0 ? 2 : 1);
     G.score = Math.floor(G.scoreF);
     ui.score.textContent = G.score; ui.melons.textContent = G.melons;
+    const kmh = Math.round(G.speed * 3.6); ui.speedo.textContent = `🌊 ${kmh} км/ч`;
+    if (Math.floor(G.run / 20) > G.speedLvl) { G.speedLvl = Math.floor(G.run / 20); notice(`⚡ Волна разгоняется — ${kmh} км/ч`); }
+    if (G.speed > 26) for (let i = 0; i < Math.floor((G.speed - 26) / 7) + 1; i++) emit(rand(-8, 8), rand(0.4, 6), -24, 0, 0, 0, 0.55, 0.1, '#ffffff', 0, 1);
   }
   Sound.setWind(playing ? clamp((G.speed - 12) / 24, 0, 1) * 0.07 + (flying() ? 0.05 : 0) : 0);
 
