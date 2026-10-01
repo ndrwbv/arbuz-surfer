@@ -122,19 +122,19 @@ float waves(vec2 p, float t){
   return sin(p.y*0.18 + t*1.1 + p.x*0.05)*0.22 + sin(p.y*0.37 - p.x*0.21 + t*1.7)*0.12
        + sin(p.x*0.6 + p.y*0.11 + t*2.3)*0.06 + sin(p.y*0.9 + p.x*0.4 - t*2.9)*0.035;
 }
-float wallH(float x){ float t = clamp((${WALL_X0.toFixed(2)} - x) / ${(WALL_X0 - WALL_X1).toFixed(2)}, 0.0, 1.0); return pow(t, 1.8) * ${WALL_H.toFixed(2)}; }
+float wallH(float x){ float t = clamp((${WALL_X0.toFixed(2)} - x) / ${(WALL_X0 - WALL_X1).toFixed(2)}, 0.0, 1.0); return pow(t, 1.8) * ${WALL_H.toFixed(2)} * uWall; }
 `;
 const waterUniforms = {
   uTime: { value: 0 }, uDist: { value: 0 }, uSun: { value: SUN_DIR },
   uDeep: { value: new THREE.Color('#0b4250') }, uShallow: { value: new THREE.Color('#1d8a8c') },
   uWallLight: { value: new THREE.Color('#62d6c4') }, uFoam: { value: new THREE.Color('#fff5e8') },
   uSkyRefl: { value: new THREE.Color('#f7b68e') }, uSunCol: { value: new THREE.Color('#ffd49c') },
-  uFogColor: { value: fogOut }, uFogNear: { value: 45 }, uFogFar: { value: 270 },
+  uFogColor: { value: fogOut }, uFogNear: { value: 45 }, uFogFar: { value: 270 }, uWall: { value: 1 },
 };
 const waterMat = new THREE.ShaderMaterial({
   uniforms: waterUniforms,
   vertexShader: /* glsl */`
-    uniform float uTime, uDist;
+    uniform float uTime, uDist, uWall;
     varying vec3 vWorld; varying vec3 vN; varying float vWave; varying float vWall;
     ${GLSL_WAVES}
     void main(){
@@ -146,7 +146,7 @@ const waterMat = new THREE.ShaderMaterial({
       float hz = waves(p + vec2(0.0, e), uTime) + wl;
       float h = w + wl;
       vN = normalize(vec3(h - hx, e, h - hz));
-      wp.y += h; vWorld = wp.xyz; vWave = w; vWall = wl;
+      wp.y += h; vWorld = wp.xyz; vWave = w; vWall = wl / uWall;
       gl_Position = projectionMatrix * viewMatrix * wp;
     }`,
   fragmentShader: /* glsl */`
@@ -205,13 +205,13 @@ const waterMat = new THREE.ShaderMaterial({
 }
 // curling lip of the wave
 const lipMat = new THREE.ShaderMaterial({
-  uniforms: { uTime: waterUniforms.uTime, uDist: waterUniforms.uDist, uWallLight: waterUniforms.uWallLight, uFoam: waterUniforms.uFoam, uShallow: waterUniforms.uShallow, uFogColor: { value: fogOut }, uFogNear: { value: 45 }, uFogFar: { value: 270 } },
+  uniforms: { uTime: waterUniforms.uTime, uDist: waterUniforms.uDist, uWallLight: waterUniforms.uWallLight, uFoam: waterUniforms.uFoam, uShallow: waterUniforms.uShallow, uFogColor: { value: fogOut }, uFogNear: { value: 45 }, uFogFar: { value: 270 }, uWall: waterUniforms.uWall },
   vertexShader: /* glsl */`
-    uniform float uTime, uDist; varying float vV; varying vec3 vWorld; varying float vZ;
+    uniform float uTime, uDist, uWall; varying float vV; varying vec3 vWorld; varying float vZ;
     void main(){
       vec3 pos = position; float pz = pos.z - uDist;
       float wob = sin(pz * 0.21 + uTime * 1.3) * 0.16 + sin(pz * 0.065 - uTime * 0.5) * 0.28;
-      pos += normal * wob * uv.y; pos.y += wob * 0.25 * uv.y;
+      pos += normal * wob * uv.y; pos.y += wob * 0.25 * uv.y + (uWall - 1.0) * ${WALL_H.toFixed(2)};
       vV = uv.y; vZ = pz;
       vec4 wp = modelMatrix * vec4(pos, 1.0); vWorld = wp.xyz;
       gl_Position = projectionMatrix * viewMatrix * wp;
@@ -262,6 +262,55 @@ const LIP = { cx: -9.6, cy: 8.4, r: 1.95, a0: Math.PI, a1: -1.25 };
   const lip = new THREE.Mesh(g, lipMat);
   lip.frustumCulled = false;
   scene.add(lip);
+}
+// barrel: sometimes the wave closes over Olya — a long tube section that scrolls towards the camera
+const barrelUniforms = { uTime: waterUniforms.uTime, uDist: waterUniforms.uDist, uWall: waterUniforms.uWall, uBarrel: { value: new THREE.Vector2(-1e4, -1e4) },
+  uWallLight: waterUniforms.uWallLight, uFoam: waterUniforms.uFoam, uShallow: waterUniforms.uShallow, uDeep: waterUniforms.uDeep, uFogColor: { value: fogOut }, uFogNear: { value: 45 }, uFogFar: { value: 270 } };
+const barrelMat = new THREE.ShaderMaterial({
+  uniforms: barrelUniforms,
+  vertexShader: /* glsl */`
+    uniform float uTime, uDist, uWall; uniform vec2 uBarrel;
+    varying float vV; varying vec3 vWorld; varying float vZ; varying float vC;
+    void main(){
+      float z = position.z, v = uv.y;
+      float c = smoothstep(uBarrel.y - 28.0, uBarrel.y, z) * (1.0 - smoothstep(uBarrel.x, uBarrel.x + 28.0, z));
+      float th = mix(2.2, mix(2.2, 0.05, c), v);
+      float pz = z - uDist;
+      float wob = (sin(pz * 0.19 + uTime * 1.4) * 0.3 + sin(pz * 0.06 - uTime * 0.6) * 0.4) * v;
+      vec3 pos = vec3(-1.0 + cos(th) * (8.6 + wob), sin(th) * (10.3 + wob) * mix(1.0, uWall, 0.7), z);
+      vV = v; vZ = pz; vC = c;
+      vec4 wp = modelMatrix * vec4(pos, 1.0); vWorld = wp.xyz;
+      gl_Position = projectionMatrix * viewMatrix * wp;
+    }`,
+  fragmentShader: /* glsl */`
+    uniform float uTime, uFogNear, uFogFar; uniform vec3 uWallLight, uFoam, uShallow, uDeep, uFogColor;
+    varying float vV; varying vec3 vWorld; varying float vZ; varying float vC;
+    ${GLSL_NOISE}
+    void main(){
+      if (vC < 0.02) discard;
+      float n = noise(vec2(vV * 10.0, vZ * 0.3 + uTime * 1.1)) * 0.6 + noise(vec2(vV * 30.0, vZ * 1.2 - uTime * 2.4)) * 0.4;
+      vec3 col = mix(uWallLight * 1.08, mix(uShallow, uDeep, 0.35), smoothstep(0.15, 0.75, vV));
+      col *= 0.85 + 0.3 * noise(vec2(vV * 4.0, vZ * 0.08 + uTime * 0.3));
+      float foam = smoothstep(0.78, 0.97, vV) + smoothstep(0.75, 0.25, vC) * 0.8;
+      foam += (1.0 - smoothstep(0.0, 0.12, vV)) * 0.6;
+      foam = clamp(foam + (n - 0.5) * 0.6, 0.0, 1.0);
+      col = mix(col, uFoam, foam);
+      float a = (1.0 - smoothstep(0.9, 1.0, vV + (n - 0.5) * 0.2)) * smoothstep(0.02, 0.25, vC);
+      if (a < 0.02) discard;
+      gl_FragColor = vec4(col, a);
+      #include <tonemapping_fragment>
+      #include <colorspace_fragment>
+      gl_FragColor.rgb = mix(gl_FragColor.rgb, uFogColor, smoothstep(uFogNear, uFogFar, length(vWorld - cameraPosition)));
+    }`,
+  transparent: true, side: THREE.DoubleSide,
+});
+{
+  const NZ = 240, NA = 40, z0 = 60, z1 = -330, positions = [], uvs = [], idx = [];
+  for (let i = 0; i <= NZ; i++) { const z = lerp(z0, z1, Math.pow(i / NZ, 1.2)); for (let j = 0; j <= NA; j++) { positions.push(0, 0, z); uvs.push(i / NZ, j / NA); } }
+  for (let i = 0; i < NZ; i++) for (let j = 0; j < NA; j++) { const a = i * (NA + 1) + j, b = a + NA + 1; idx.push(a, b, a + 1, b, b + 1, a + 1); }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2)); g.setIndex(idx);
+  const barrel = new THREE.Mesh(g, barrelMat); barrel.frustumCulled = false; barrel.renderOrder = 2; scene.add(barrel);
 }
 
 // ───────────────────────── particles
@@ -689,9 +738,14 @@ const BIOMES = [
   { id: 'moscow', name: '🏙️ Москва-река', ground: '#8d9196' },
   { id: 'piter', name: '🌉 Нева · Питер', ground: '#a0958e' },
   { id: 'tomsk', name: '🌲 Томь · Томск', ground: '#6e8d4c' },
+  { id: 'hawaii', name: '🌺 Гавайи', ground: '#d9bf8a' },
+  { id: 'phiphi', name: '🏝️ Пхи-Пхи', ground: '#f3e6c8' },
+  { id: 'glacier', name: '🧊 Ледники', ground: '#eef4f8' },
 ];
-const BIOME_LEN = 800, SHORE_X = 46, GROUND_LEN = 40, TOD_LEN = 2600;
-const biomeAt = (d) => Math.floor(Math.max(0, d) / BIOME_LEN) % BIOMES.length;
+const BIOME_LEN = 650, SHORE_X = 46, GROUND_LEN = 40, TOD_LEN = 2600;
+// pyramids always open the run, the rest come in a fresh random order every run
+const biomeAt = (d) => G.order[Math.floor(Math.max(0, d) / BIOME_LEN) % G.order.length];
+const shuffledOrder = () => [0, ...[...BIOMES.keys()].slice(1).sort(() => Math.random() - 0.5)];
 const PASTEL = ['#f2d48a', '#9fd3c2', '#f2b5a8', '#c9d6e8', '#efe3c8', '#e8c2d8'];
 
 function makePalm() {
@@ -788,17 +842,74 @@ function makeChurch() {
   return g;
 }
 const makeHill = () => { const g = new THREE.Group(); g.add(sph(mc('#5f8a45', { roughness: 1 }), rand(14, 24), rand(5, 9), rand(20, 32))); return g; };
+function makeTiki() {
+  const g = new THREE.Group(), wood = mc('#6b4a33'), straw = mc('#c9a35a', { roughness: 1 });
+  for (const [x, z] of [[-1.6, -1.6], [1.6, -1.6], [-1.6, 1.6], [1.6, 1.6]]) g.add(mesh(CYL16, wood, 0.15, 3, 0.15, x, 1.5, z));
+  g.add(box(wood, 4, 0.25, 4, 0, 1.2, 0)); g.add(mesh(CONE8, straw, 3.2, 2.6, 3.2, 0, 4.2, 0));
+  return g;
+}
+function makeHibiscus() {
+  const g = new THREE.Group(); g.add(sph(mc('#2f6b3a'), rand(1.2, 1.8), rand(0.9, 1.3), rand(1.2, 1.8), 0, 0.9, 0));
+  for (let i = 0; i < 6; i++) { const a = rand(0, 6.28); g.add(sph(mc(pick(['#ff3b6b', '#ff7a3d', '#ffd24a', '#ff5fa2'])), 0.28, 0.2, 0.28, Math.cos(a) * 1.3, rand(0.9, 1.9), Math.sin(a) * 1.3)); }
+  return g;
+}
+function makeBoardRack() {
+  const g = new THREE.Group();
+  ['#ff5e6c', '#4fd1c5', '#ffc93c', '#8b6cff'].slice(0, randi(2, 4)).forEach((c, i) => { const b = makeBoard(mc(c, { roughness: 0.35 })); b.rotation.set(-Math.PI / 2 + rand(-0.15, 0.15), 0, rand(-0.2, 0.2)); b.position.set(0, 1.3, i * 0.9); g.add(b); });
+  return g;
+}
+function makeKarst() {
+  const g = new THREE.Group(), rock = mc(pick(['#9c9585', '#8f8a7c', '#a8a08c']), { roughness: 1 }), green = mc('#4f7a3a', { roughness: 1 });
+  const h = rand(14, 34), r = rand(4, 9);
+  g.add(sph(rock, r, h * 0.5, r * 0.9, 0, h * 0.4, 0)); g.add(sph(rock, r * 0.75, h * 0.35, r * 0.7, rand(-1, 1), h * 0.75, rand(-1, 1)));
+  g.add(sph(green, r * 0.7, h * 0.12, r * 0.65, 0, h * 0.98, 0)); g.add(sph(green, r * 0.5, h * 0.2, r * 0.4, r * 0.6, h * 0.6, 0));
+  return g;
+}
+function makeLongtail() {
+  const g = new THREE.Group(), wood = mc('#8a5a3a'), dark = mc('#3a2a20');
+  g.add(sph(wood, 0.8, 0.45, 4, 0, 0.2, 0)); g.add(box(dark, 1.1, 0.1, 6, 0, 0.55, 0));
+  const bow = mesh(CYL16, wood, 0.18, 2.2, 0.18, 0, 1.2, -4); bow.rotation.x = -0.5; g.add(bow);
+  ['#ff3b6b', '#ffd24a', '#4fd1c5'].forEach((c, i) => g.add(box(mc(c), 0.05, 0.9, 0.1, 0, 1.6 - i * 0.2, -4.35 + i * 0.12)));
+  const pole = mesh(CYL16, dark, 0.06, 3.2, 0.06, 0, 0.6, 4.6); pole.rotation.x = 1.25; g.add(pole);
+  g.rotation.y = rand(-0.6, 0.6);
+  return g;
+}
+const ICO = new THREE.IcosahedronGeometry(1, 0);
+function makeIceberg() {
+  const g = new THREE.Group(), ice = mc(pick(['#eaf7ff', '#dff2fb']), { roughness: 0.25, flatShading: true }), blue = mc('#a9dcf0', { roughness: 0.2, flatShading: true });
+  const s = rand(2.5, 7);
+  const m = mesh(ICO, ice, s * rand(0.9, 1.4), s * rand(0.6, 1.1), s * rand(0.9, 1.4), 0, s * 0.25, 0); m.rotation.y = rand(0, 3); g.add(m);
+  g.add(mesh(ICO, blue, s * 0.7, s * 0.4, s * 0.7, s * 0.4, s * 0.1, rand(-1, 1)));
+  return g;
+}
+function makeIceCliff() {
+  const g = new THREE.Group();
+  for (let i = 0; i < 4; i++) { const h = rand(6, 16); const m = mesh(ICO, mc(pick(['#dff2fb', '#c4e6f4', '#eef8fd']), { roughness: 0.3, flatShading: true }), rand(3, 6), h, rand(3, 6), rand(-3, 3), h * 0.5, i * 4 - 6); m.rotation.y = rand(0, 3); g.add(m); }
+  return g;
+}
+function makePenguin() {
+  const g = new THREE.Group(), black = mc('#1d1f26'), white = mc('#f4f4f2'), orange = mc('#ff9a2a');
+  g.add(sph(black, 0.32, 0.5, 0.3, 0, 0.5, 0)); g.add(sph(white, 0.24, 0.4, 0.2, 0, 0.45, 0.12)); g.add(sph(black, 0.2, 0.2, 0.2, 0, 1.05, 0));
+  const beak = mesh(new THREE.ConeGeometry(0.06, 0.18, 6), orange, 1, 1, 1, 0, 1.03, 0.24); beak.rotation.x = Math.PI / 2; g.add(beak);
+  for (const sx of [-1, 1]) { g.add(sph(orange, 0.1, 0.03, 0.14, sx * 0.12, 0.02, 0.08)); g.add(sph(white, 0.03, 0.03, 0.02, sx * 0.08, 1.1, 0.17)); }
+  return g;
+}
+const makePenguins = () => { const g = new THREE.Group(); for (let i = 0; i < randi(2, 5); i++) { const p = makePenguin(); p.position.set(rand(-1.5, 1.5), 0, rand(-2, 2)); p.rotation.y = -Math.PI / 2 + rand(-0.6, 0.6); p.scale.setScalar(rand(1.1, 1.6)); g.add(p); } return g; };
 const PROPS = {
   desert: [[0.32, makePalm, 48, 62], [0.22, makeDune, 70, 130], [0.14, makeCamel, 52, 72], [0.22, makePyramid, 80, 150], [0.1, makeVan, 48, 54]],
   moscow: [[0.35, makeLamp, 47.4, 47.4], [0.42, makeTower, 95, 160], [0.14, makeKremlinTower, 70, 90], [0.09, makeBasil, 64, 74]],
   piter: [[0.4, makeLamp, 47.4, 47.4], [0.12, makeAdmiralty, 70, 80], [0.1, makeIsaac, 80, 100], [0.38, () => makeFacade(rand(10, 16), rand(14, 20)), 66, 90]],
   tomsk: [[0.25, makeIzba, 52, 62], [0.3, makeBirch, 48, 75], [0.35, makePine, 55, 120], [0.05, makeChurch, 66, 80], [0.05, makeHill, 90, 140]],
+  // 5th field: 'sea' stands in the water, 'float' bobs on the waves
+  hawaii: [[0.36, makePalm, 48, 64], [0.18, makeTiki, 52, 62], [0.2, makeHibiscus, 47.5, 58], [0.12, makeBoardRack, 48, 51], [0.14, makeHill, 80, 140]],
+  phiphi: [[0.34, makeKarst, 16, 70, 'sea'], [0.16, makeLongtail, 11, 24, 'float'], [0.3, makePalm, 48, 60], [0.12, makeTiki, 50, 58], [0.08, makeKarst, 60, 120]],
+  glacier: [[0.34, makeIceberg, 13, 60, 'float'], [0.26, makeIceCliff, 52, 80], [0.2, makePenguins, 47.5, 50], [0.2, makeIceberg, 60, 110, 'sea']],
 };
 function makeGround(b) {
   const g = new THREE.Group(), id = BIOMES[b].id;
   g.add(box(mc(BIOMES[b].ground, { roughness: 1 }), 220, 1.6, GROUND_LEN + 0.6, SHORE_X + 110, 0, 0));
   if (id === 'moscow' || id === 'piter') g.add(box(mc(id === 'moscow' ? '#7d8287' : '#b49a8a', { roughness: 0.9 }), 1.2, 1.1, GROUND_LEN + 0.6, SHORE_X + 0.6, 1.3, 0));
-  else g.add(box(mc(id === 'desert' ? '#efc08a' : '#c9b07a', { roughness: 1 }), 6, 0.9, GROUND_LEN + 0.6, SHORE_X - 1.5, 0.05, 0));
+  else g.add(box(mc({ desert: '#efc08a', tomsk: '#c9b07a', hawaii: '#e8d3a4', phiphi: '#fbf3de', glacier: '#d6ecf6' }[id], { roughness: 1 }), 6, 0.9, GROUND_LEN + 0.6, SHORE_X - 1.5, 0.05, 0));
   if (id === 'moscow') {
     const red = RED(); g.add(box(red, 2.2, 7, GROUND_LEN, SHORE_X + 9, 4.3, 0));
     g.add(mesh(MERLONS, red, 1, 1, 1, SHORE_X + 9, 8.4, 0));
@@ -816,14 +927,18 @@ function addProp(z) {
   const list = PROPS[BIOMES[biomeForZ(z)].id];
   let r = Math.random() * list.reduce((s, x) => s + x[0], 0), item = list[0];
   for (const it of list) { r -= it[0]; if (r <= 0) { item = it; break; } }
-  const g = item[1](); g.position.set(rand(item[2], item[3]), 0.8, z); scene.add(g); scenery.push(g);
+  const g = item[1](); g.position.set(rand(item[2], item[3]), item[4] ? -0.3 : 0.8, z); g.userData.float = item[4] === 'float'; scene.add(g); scenery.push(g);
 }
 function addGround(z) { const g = makeGround(biomeForZ(z)); g.position.z = z; scene.add(g); scenery.push(g); }
 function updateScenery(dz) {
   G.nextPropZ += dz; G.nextGroundZ += dz;
   while (G.nextGroundZ > -340) { addGround(G.nextGroundZ); G.nextGroundZ -= GROUND_LEN; }
   while (G.nextPropZ > -330) { addProp(G.nextPropZ); G.nextPropZ -= rand(8, 15); }
-  for (let i = scenery.length - 1; i >= 0; i--) { const s = scenery[i]; s.position.z += dz; if (s.position.z > 90) { scene.remove(s); scenery.splice(i, 1); } }
+  for (let i = scenery.length - 1; i >= 0; i--) {
+    const s = scenery[i]; s.position.z += dz;
+    if (s.userData.float) { s.position.y = waveH(s.position.x, s.position.z - G.dist, G.t) * 0.8 - 0.3; s.rotation.z = Math.sin(G.t * 1.3 + s.position.x) * 0.04; }
+    if (s.position.z > 90) { scene.remove(s); scenery.splice(i, 1); }
+  }
 }
 function resetScenery() {
   for (const s of scenery) scene.remove(s); scenery.length = 0;
@@ -847,6 +962,14 @@ const skylines = BIOMES.map(() => { const g = new THREE.Group(); g.visible = fal
   ({ near: n, far: f } = skylines[3].userData); g = skylines[3];
   for (let i = 0; i < 5; i++) g.add(sph(i % 2 ? n : f, rand(80, 140), rand(25, 45), 60, 100 + i * 90, -6, -600 - (i % 2) * 40));
   for (let i = 0; i < 40; i++) { const x = 70 + i * 9 + rand(-3, 3); g.add(mesh(CONE8, n, 4, rand(12, 22), 4, x, 24 + Math.sin(i * 0.4) * 10, -560)); }
+  ({ near: n, far: f } = skylines[4].userData); g = skylines[4];
+  g.add(mesh(new THREE.ConeGeometry(1, 1, 12), n, 150, 120, 150, 230, 56, -640));
+  g.add(mesh(new THREE.CylinderGeometry(40, 95, 55, 12), f, 1, 1, 1, 110, 25, -600));
+  { const glow = new THREE.MeshBasicMaterial({ color: '#ff6a2a', fog: false, transparent: true, opacity: 0, depthWrite: false }); g.add(sph(glow, 16, 6, 16, 230, 116, -640)); g.userData.extra = [[glow, 0.9]]; }
+  ({ near: n, far: f } = skylines[5].userData); g = skylines[5];
+  for (let i = 0; i < 16; i++) { const h = rand(40, 120), r = rand(10, 22), x = 60 + i * 26 + rand(-8, 8), z = -560 - rand(0, 80); g.add(sph(i % 2 ? n : f, r, h * 0.5, r, x, h * 0.4, z)); g.add(sph(i % 2 ? n : f, r * 0.7, h * 0.3, r * 0.7, x, h * 0.8, z)); }
+  ({ near: n, far: f } = skylines[6].userData); g = skylines[6]; skylines[6].userData.mats = [[n, 1.04], [f, 1.12]];
+  for (let i = 0; i < 14; i++) { const h = rand(60, 150); g.add(mesh(new THREE.ConeGeometry(1, 1, 5), i % 2 ? n : f, rand(40, 70), h, rand(40, 70), 70 + i * 30 + rand(-10, 10), h / 2 - 4, -600 - (i % 3) * 30)); }
 }
 
 // ───────────────────────── time of day
@@ -1004,6 +1127,7 @@ const G = {
   state: 'loading', lives: 3, t: 0, run: 0, dist: 0, runDist: 0, speed: 12, score: 0, scoreF: 0, melons: 0, best: store.get('best', 0),
   boost: 0, boostMax: 6.5, fly: 0, husky: 0, nextRowZ: -50, sincePower: 0, lastHit: null, streak: 0, lastMelonT: 0, shake: 0,
   slowmo: 1, dyingT: 0, stumbleT: 0, nextPropZ: 70, nextGroundZ: 80, biome: -1, nextCameo: 14, cameoIdx: 0,
+  order: [0, 1, 2, 3, 4, 5, 6], barrel: null, nextBarrel: 12, tubeIn: 0, nextCritter: 2,
 };
 const START_LIVES = 3, MAX_LIVES = 5;
 const FLY_T = 6.5, FLY_H = 5.2, HUSKY_T = 3.4, HUSKY_H = 8.5;
@@ -1470,7 +1594,7 @@ function resetRide() {
 function startRun() {
   Sound.init();
   clearEntities(); clearCameos(); resetRide();
-  Object.assign(G, { state: 'play', run: 0, runDist: 0, speed: 15, score: 0, scoreF: 0, melons: 0, boost: 0, fly: 0, husky: 0, nextRowZ: -55, sincePower: 5, streak: 0, slowmo: 1, stumbleT: 0, biome: -1, nextCameo: rand(10, 14), lastHit: null, speedLvl: 0, lives: START_LIVES });
+  Object.assign(G, { state: 'play', run: 0, runDist: 0, speed: 15, score: 0, scoreF: 0, melons: 0, boost: 0, fly: 0, husky: 0, nextRowZ: -55, sincePower: 5, streak: 0, slowmo: 1, stumbleT: 0, biome: -1, nextCameo: rand(10, 14), lastHit: null, speedLvl: 0, lives: START_LIVES, order: shuffledOrder(), barrel: null, nextBarrel: rand(14, 22) });
   Object.assign(player, { lane: 1, prevLane: 1, h: 0, vy: 0, air: false, duckT: 0, invuln: 0, trick: 0 });
   resetScenery();
   camMode = 'chase';
@@ -1501,7 +1625,7 @@ function gameOver() {
   overStep('result');
   ui.hud.hidden = true; show(ui.over);
   clearEntities(); clearCameos(); resetRide(); camMode = 'title';
-  Object.assign(player, { lane: 1, h: 0, air: false }); G.fly = 0; G.husky = 0; G.boost = 0; G.runDist = 0;
+  Object.assign(player, { lane: 1, h: 0, air: false }); G.fly = 0; G.husky = 0; G.boost = 0; G.runDist = 0; G.barrel = null; G.nextBarrel = rand(10, 18);
   resetScenery();
   Sound.setMusic(0.12);
 }
@@ -1615,6 +1739,49 @@ function collides(e, prevZ) {
     && player.h < e.yMax && player.h + (player.duck > 0.5 ? 0.95 : 1.72) > e.yMin;
 }
 
+// fish (and sometimes dolphins, penguins on the ice) jump at the side — pure decoration, no collisions
+const critters = [];
+function makeFish(color) {
+  const g = new THREE.Group(), m = mc(color, { roughness: 0.3, metalness: 0.35 });
+  g.add(sph(m, 0.12, 0.15, 0.36)); const tail = mesh(CONE4, m, 0.16, 0.22, 0.06, 0, 0, -0.42); tail.rotation.x = -Math.PI / 2; g.add(tail);
+  g.add(sph(mc('#111'), 0.025, 0.025, 0.025, 0.09, 0.04, 0.22)); g.add(sph(mc('#111'), 0.025, 0.025, 0.025, -0.09, 0.04, 0.22));
+  return g;
+}
+function makeDolphin() {
+  const g = new THREE.Group(), m = mc('#7d8fa0', { roughness: 0.35 });
+  g.add(sph(m, 0.35, 0.38, 1.1)); g.add(sph(mc('#dfe6ea'), 0.28, 0.25, 0.9, 0, -0.12, 0.05)); g.add(sph(m, 0.1, 0.1, 0.35, 0, -0.05, 1.2));
+  const fin = mesh(new THREE.ConeGeometry(0.25, 0.5, 3), m, 0.3, 1, 1, 0, 0.45, -0.1); fin.rotation.x = -0.4; g.add(fin);
+  const tail = mesh(CONE4, m, 0.45, 0.4, 0.08, 0, 0, -1.2); tail.rotation.x = -Math.PI / 2; g.add(tail);
+  return g;
+}
+function spawnCritters(biomeId) {
+  const kind = biomeId === 'glacier' && Math.random() < 0.6 ? 'penguin' : Math.random() < 0.18 ? 'dolphin' : 'fish';
+  const n = kind === 'fish' ? randi(3, 6) : randi(2, 3), x0 = rand(6.5, 14), z0 = rand(-55, -25), dir = Math.random() < 0.5 ? 1 : -1;
+  const color = pick(['#9fc3d6', '#ff9a3c', '#ffd24a', '#7fd6c8', '#c9d6e8']);
+  for (let i = 0; i < n; i++) {
+    const m = kind === 'fish' ? makeFish(color) : kind === 'dolphin' ? makeDolphin() : makePenguin();
+    m.scale.setScalar(kind === 'penguin' ? 0.8 : kind === 'fish' ? rand(1.5, 2) : 1);
+    m.rotation.order = 'YXZ'; m.visible = false; scene.add(m);
+    const big = kind !== 'fish';
+    critters.push({ m, x: x0 + rand(-0.8, 0.8), z: z0 - i * (big ? 2.6 : 1.1), delay: i * (big ? 0.35 : 0.16), t: 0, dur: big ? 1.3 : rand(0.7, 0.95), h: big ? 2.4 : rand(1, 1.8), dx: dir * rand(1.5, 3), dz: rand(-6, -2), size: big ? 0.45 : 0.25, penguin: kind === 'penguin' });
+  }
+}
+function updateCritters(dt, dz, t, biomeId) {
+  G.nextCritter -= dt;
+  if (G.nextCritter <= 0 && G.state !== 'loading') { spawnCritters(biomeId); G.nextCritter = rand(2.2, 5); }
+  for (let i = critters.length - 1; i >= 0; i--) {
+    const c = critters[i]; c.z += dz; c.t += dt;
+    if (c.t < c.delay) continue;
+    const k = (c.t - c.delay) / c.dur;
+    if (!c.m.visible) { c.m.visible = true; burst(c.x, 0.2, c.z, 10, { spread: 1, up: 3, life: 0.6, size: c.size }); }
+    c.x += c.dx * dt; c.z += c.dz * dt;
+    c.m.position.set(c.x, waveH(c.x, c.z - G.dist, G.t) - 0.3 + c.h * Math.sin(Math.PI * Math.min(k, 1)), c.z);
+    c.m.rotation.set(c.penguin ? -0.6 - Math.cos(Math.PI * k) * 0.5 : -Math.cos(Math.PI * k) * 0.9, Math.atan2(c.dx, c.dz), c.penguin ? 0 : Math.sin(t * 20) * 0.15);
+    if (k >= 1) { burst(c.x, 0.2, c.z, 12, { spread: 1.2, up: 3, life: 0.6, size: c.size }); scene.remove(c.m); critters.splice(i, 1); }
+    else if (c.z > 20) { scene.remove(c.m); critters.splice(i, 1); }
+  }
+}
+
 function update(rawDt) {
   const dt = rawDt * G.slowmo;
   G.t += rawDt;
@@ -1634,10 +1801,32 @@ function update(rawDt) {
   waterUniforms.uTime.value = t; waterUniforms.uDist.value = G.dist; skyMat.uniforms.uTime.value = t;
   applyTOD(G.state === 'title' ? 0 : (G.runDist / TOD_LEN) % 1);
 
+  // the tube: a closed section of the wave rolls towards Olya, she rides inside and gets spat out
+  if (playing || G.state === 'title') {
+    G.nextBarrel -= dt;
+    if (G.nextBarrel <= 0 && !G.barrel) { const L = clamp(G.speed * rand(4, 6), 90, 260); G.barrel = { near: -240, far: -240 - L }; }
+  }
+  if (G.barrel) {
+    const b = G.barrel; b.near += dz; b.far += dz;
+    if (b.far < -1 && b.near > 1 && !b.in) { b.in = true; if (playing) notice('🌀 Волна закрутилась — едем в трубе!'); }
+    if (b.in && b.far >= -1 && !b.out) {
+      b.out = true;
+      burst(player.x, 2, -6, 90, { spread: 5, up: 6, life: 1.1, size: 0.26, colors: ['#ffffff', '#dff7f2', '#bfeee6'] });
+      if (playing) { G.scoreF += 100; floatText('🌀 Труба! +100', player.x, player.h + 2.4, 0, 'smash'); notice('💦 Выплюнуло из трубы! +100'); Sound.splash(); }
+    }
+    if (b.far > 40) { G.barrel = null; G.nextBarrel = rand(22, 38); }
+  }
+  barrelUniforms.uBarrel.value.set(G.barrel ? G.barrel.near : -1e4, G.barrel ? G.barrel.far : -1e4);
+  G.tubeIn = damp(G.tubeIn, G.barrel && G.barrel.far < 0 && G.barrel.near > 0 ? 1 : 0, 3, rawDt);
+  hemi.intensity *= 1 - 0.2 * G.tubeIn; sunLight.intensity *= 1 - 0.35 * G.tubeIn;
+  // the wave breathes: grows and shrinks just for the picture
+  const wallTarget = 1 + 0.18 * Math.sin(t * 0.11) + 0.08 * Math.sin(t * 0.29 + 1.3) + (G.barrel ? 0.12 : 0);
+  waterUniforms.uWall.value = damp(waterUniforms.uWall.value, wallTarget, 1.5, rawDt);
+
   // biome name + skylines
   const cur = biomeAt(G.runDist);
   if (playing && cur !== G.biome) { G.biome = cur; notice(BIOMES[cur].name); }
-  skylines.forEach((s, i) => { const u = s.userData; u.o = damp(u.o, i === cur ? 1 : 0, 0.9, rawDt); s.visible = u.o > 0.01; u.near.opacity = u.far.opacity = u.o; });
+  skylines.forEach((s, i) => { const u = s.userData; u.o = damp(u.o, i === cur ? 1 : 0, 0.9, rawDt); s.visible = u.o > 0.01; u.near.opacity = u.far.opacity = u.o; for (const [m, k] of u.extra || []) m.opacity = u.o * k * (0.8 + 0.2 * Math.sin(t * 3)); });
 
   // player
   if (playing) {
@@ -1702,7 +1891,7 @@ function update(rawDt) {
   if (G.husky > 0 && playing) emit(player.x + rand(-0.4, 0.4), waterY + player.h + 0.4, 0.8, rand(-0.5, 0.5), rand(-0.5, 0.5), rand(2, 4), 0.6, rand(0.15, 0.3), pick(['#9fdcff', '#ffffff']), 0);
   for (let i = 0; i < 3; i++) {
     const z = rand(-80, 15), a = LIP.a1 + rand(-0.05, 0.1);
-    emit(LIP.cx + Math.cos(a) * LIP.r, LIP.cy + Math.sin(a) * LIP.r, z, rand(0.5, 2.2), rand(-1, 0.6), rand(-0.5, 0.5), rand(0.6, 1.1), rand(0.3, 0.7), '#ffffff', 6);
+    emit(LIP.cx + Math.cos(a) * LIP.r, LIP.cy + Math.sin(a) * LIP.r + (waterUniforms.uWall.value - 1) * WALL_H, z, rand(0.5, 2.2), rand(-1, 0.6), rand(-0.5, 0.5), rand(0.6, 1.1), rand(0.3, 0.7), '#ffffff', 6);
   }
   if (G.boost > 0 && !dying) {
     for (let i = 0; i < 2; i++) emit(player.x + rand(-0.5, 0.5), player.h + waterY + rand(0.2, 1.8), 0.6, rand(-0.5, 0.5), rand(0, 1), rand(1, 3), rand(0.4, 0.8), rand(0.12, 0.24), pick(['#ffd34a', '#ff7aa2', '#7fe3d4', '#ffffff']), 1);
@@ -1781,6 +1970,9 @@ function update(rawDt) {
   }
   updateScenery(dz);
   updateCameos(dt, t, dz);
+  const biomeId = BIOMES[cur].id;
+  updateCritters(dt, dz, t, biomeId);
+  if (biomeId === 'glacier' && (playing || G.state === 'title')) for (let i = 0; i < 2; i++) emit(rand(-10, 14), rand(5, 10), rand(-45, 6), rand(-0.3, 0.3), -rand(0.8, 1.8), 0, 4, rand(0.06, 0.12), '#ffffff', 0, 1);
 
   if (playing) {
     G.scoreF += dz * 0.5 * (G.boost > 0 ? 2 : 1);
