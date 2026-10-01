@@ -42,6 +42,7 @@ canvas#c { position: fixed; inset: 0; width: 100%; height: 100%; display: block;
 .btn.primary:hover { box-shadow: 0 14px 34px rgba(255, 70, 100, .55), inset 0 -3px 0 rgba(0,0,0,.12); }
 .btn.ghost { background: rgba(255, 255, 255, .72); color: var(--ink); backdrop-filter: blur(6px); }
 .btn.ghost:hover { background: #fff; }
+.btn.field { background: linear-gradient(135deg, #8fd16a, #2f8f4e); color: #fff; box-shadow: 0 10px 24px rgba(47, 143, 78, .35), inset 0 -3px 0 rgba(0,0,0,.12); }
 .btns { display: flex; gap: 10px; flex-wrap: wrap; }
 .icon {
   width: 44px; height: 44px; border-radius: 50%; border: 0; cursor: pointer; font-size: 19px;
@@ -204,6 +205,7 @@ h1 {
   .lead { font-size: 15px; margin-bottom: 16px; }
   .btn { padding: 15px 22px; font-size: 16px; }
   .btns .btn.primary { flex: 1; }
+  .btns .btn.field { flex: 1 1 100%; }
   .over-card { flex-direction: column; }
   .over-photo { width: 100%; height: 170px; }
   .over-photo img { object-position: 50% 22%; }
