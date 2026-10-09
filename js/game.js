@@ -1984,7 +1984,7 @@ function updateCameos(dt, t, dz) {
     if (done) { disposeSprites(c.g); scene.remove(c.g); cameos.splice(i, 1); if (c.kind === 'carpet' && G.state === 'play') queueThailand(); }
   }
 }
-function clearCameos() { for (const c of cameos) { disposeSprites(c.g); scene.remove(c.g); for (const e of c.embers || []) scene.remove(e.m); for (const s of c.sand || []) scene.remove(s); } cameos.length = 0; }
+function clearCameos() { for (const c of cameos) { disposeSprites(c.g); scene.remove(c.g); for (const e of c.embers || []) scene.remove(e.m); for (const s of c.sand || []) scene.remove(s); } cameos.length = 0; for (const c of critters) scene.remove(c.m); critters.length = 0; }
 
 // Olya's ride extras: coffee jet under the board, a husky to sit on
 const jet = new THREE.Group(); jet.visible = false; olya.model.add(jet);
@@ -2633,9 +2633,9 @@ function spawnCritters(biomeId) {
     critters.push({ m, x: x0 + rand(-0.8, 0.8), z: z0 - i * (big ? 2.6 : 1.1), delay: i * (big ? 0.35 : 0.16), t: 0, dur: big ? 1.3 : rand(0.7, 0.95), h: big ? 2.4 : rand(1, 1.8), dx: dir * rand(1.5, 3), dz: rand(-6, -2), size: big ? 0.45 : 0.25, penguin: kind === 'penguin' });
   }
 }
-function updateCritters(dt, dz, t, biomeId) {
+function updateCritters(dt, dz, t, biomeId, canSpawn = true) {
   G.nextCritter -= dt;
-  if (G.nextCritter <= 0 && G.state !== 'loading') { spawnCritters(biomeId); G.nextCritter = rand(2.2, 5); }
+  if (canSpawn && G.nextCritter <= 0 && G.state !== 'loading') { spawnCritters(biomeId); G.nextCritter = rand(2.2, 5); }
   for (let i = critters.length - 1; i >= 0; i--) {
     const c = critters[i]; c.z += dz; c.t += dt;
     if (c.t < c.delay) continue;
@@ -2934,7 +2934,7 @@ function update(rawDt) {
   updateScenery(dz);
   updateCameos(dt, t, dz);
   const biomeId = BIOMES[cur].id;
-  if (G.mode !== 'field' && biomeId !== 'thai') updateCritters(dt, dz, t, biomeId);
+  updateCritters(dt, dz, t, biomeId, G.mode !== 'field' && biomeId !== 'thai');
   if (biomeId === 'thai' && G.mode !== 'field' && Math.random() < 0.06) emit(rand(-30, 60), rand(4, 10), rand(-160, -40), rand(-0.3, 0.3), rand(0.6, 1.2), rand(-0.2, 0.2), rand(6, 10), rand(0.5, 0.9), pick(['#ffb347', '#ff9a3c', '#ffd27a']), -0.05, 1); // khom loi
   if (biomeId === 'glacier' && G.mode !== 'field' && (playing || G.state === 'title')) for (let i = 0; i < 2; i++) emit(rand(-10, 14), rand(5, 10), rand(-45, 6), rand(-0.3, 0.3), -rand(0.8, 1.8), 0, 4, rand(0.06, 0.12), '#ffffff', 0, 1);
 
@@ -3054,7 +3054,7 @@ function frame() {
   setTimeout(() => $('loading').classList.add('done'), 150);
   Wishes.load();
   // debug handle: deterministic stepping for testing in a hidden tab
-  window.__arbuz = { G, player, entities, cameos, LAND, PINCH, olya, startRun, startPower, addPower, addObstacle, spawnFedor, spawnCarpet, spawnVanya, resetScenery, jump, duck, move, Wishes,
+  window.__arbuz = { G, player, entities, cameos, critters, LAND, PINCH, olya, startRun, startPower, addPower, addObstacle, spawnFedor, spawnCarpet, spawnVanya, resetScenery, jump, duck, move, Wishes,
     step(sec) { for (let i = 0; i < Math.round(sec * 60); i++) update(1 / 60); renderer.render(scene, camera); },
     setView(w, h) { renderer.setPixelRatio(1); renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); } };
 })();
