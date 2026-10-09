@@ -906,11 +906,25 @@ const BIOMES = [
   { id: 'hawaii', name: '🌺 Гавайи', ground: '#d9bf8a' },
   { id: 'phiphi', name: '🏝️ Пхи-Пхи', ground: '#f3e6c8' },
   { id: 'glacier', name: '🧊 Ледники', ground: '#eef4f8' },
+  { id: 'thai', name: '🛵 Таиланд: в гостях у Вани', ground: '#5f8f3c' },
 ];
 const BIOME_LEN = 650, SHORE_X = 46, GROUND_LEN = 40, TOD_LEN = 2600;
-// pyramids always open the run, the rest come in a fresh random order every run
+// pyramids always open the run, the rest come in a fresh random order every run.
+// Thailand is the story beat after Zhanna & Andrey fly by: it's queued as the next place when their carpet leaves.
 const biomeAt = (d) => G.order[Math.floor(Math.max(0, d) / BIOME_LEN) % G.order.length];
-const shuffledOrder = () => [0, ...[...BIOMES.keys()].slice(1).sort(() => Math.random() - 0.5)];
+const THAI_I = BIOMES.findIndex((b) => b.id === 'thai');
+const shuffledOrder = () => [0, ...[...BIOMES.keys()].filter((i) => i !== 0 && i !== THAI_I).sort(() => Math.random() - 0.5), THAI_I];
+function queueThailand() {
+  if (G.thaiQueued || G.mode === 'field') return;
+  G.thaiQueued = true; G.nextCameo = 1e9; // nobody else in between — Vanya is next (entering Thailand brings him in)
+  const seg = Math.floor(G.runDist / BIOME_LEN);
+  if (G.order[seg % G.order.length] === THAI_I) return;
+  G.order.splice(G.order.indexOf(THAI_I), 1);
+  G.order.splice(seg + 1, 0, THAI_I);
+  // arrive soon: jump to the stretch where the light already starts turning Thai
+  const edge = (seg + 1) * BIOME_LEN - MOOD_BLEND;
+  if (G.runDist < edge) G.runDist = edge;
+}
 const PASTEL = ['#f2d48a', '#9fd3c2', '#f2b5a8', '#c9d6e8', '#efe3c8', '#e8c2d8'];
 
 function makePalm() {
@@ -1060,6 +1074,76 @@ function makePenguin() {
   return g;
 }
 const makePenguins = () => { const g = new THREE.Group(); for (let i = 0; i < randi(2, 5); i++) { const p = makePenguin(); p.position.set(rand(-1.5, 1.5), 0, rand(-2, 2)); p.rotation.y = -Math.PI / 2 + rand(-0.6, 0.6); p.scale.setScalar(rand(1.1, 1.6)); g.add(p); } return g; };
+// Thailand: a sandy spit right next to the wave (so it reads on a phone), the mainland with temples and jungle behind
+const THAI_SPIT_X = 7.8, THAI_SPIT_W = 6.6;
+function makeWat() {
+  const g = new THREE.Group(), white = mc('#f4efe6', { roughness: 0.8 }), red = mc('#c8322b', { roughness: 0.6 }), green = mc('#2e7d5b', { roughness: 0.6 }), gold = mc('#e8b830', { roughness: 0.35, metalness: 0.6, emissive: '#a07000', emissiveIntensity: 0.2 });
+  g.add(box(white, 9, 1.2, 14, 0, 0.6, 0)); g.add(box(white, 7, 4, 12, 0, 3.2, 0));
+  const roof = (w, h, l, y, m) => { const r = mesh(new THREE.CylinderGeometry(0.01, 1, 1, 4, 1), m, w, h, l, 0, y, 0); r.rotation.y = Math.PI / 4; g.add(r); };
+  roof(6.6, 3.2, 10.4, 6.8, red); roof(5.2, 2.6, 8.2, 8.6, green); roof(3.8, 2.2, 6, 10.2, red);
+  for (const z of [-5.5, 5.5]) { const c = mesh(new THREE.ConeGeometry(0.2, 1.6, 6), gold, 1, 1, 1, 0, 11.4, z * 0.6); c.rotation.x = z > 0 ? 0.5 : -0.5; g.add(c); }
+  for (const x of [-3.2, 3.2]) for (const z of [-5, 0, 5]) g.add(mesh(CYL16, gold, 0.18, 4, 0.18, x, 3.2, z));
+  return g;
+}
+function makeStupa() {
+  const g = new THREE.Group(), gold = mc('#f0c23a', { roughness: 0.3, metalness: 0.7, emissive: '#b07a00', emissiveIntensity: 0.25 }), white = mc('#f4efe6');
+  const s = rand(0.8, 1.4);
+  g.add(box(white, 6 * s, 1.5 * s, 6 * s, 0, 0.75 * s, 0)); g.add(box(white, 4.6 * s, 1.2 * s, 4.6 * s, 0, 2.1 * s, 0));
+  g.add(sph(gold, 2.2 * s, 2.6 * s, 2.2 * s, 0, 4.2 * s, 0));
+  g.add(mesh(new THREE.ConeGeometry(1, 1, 16), gold, 0.9 * s, 6 * s, 0.9 * s, 0, 8.8 * s, 0));
+  return g;
+}
+function makeJungle() {
+  const g = new THREE.Group();
+  for (let i = 0; i < 5; i++) g.add(sph(mc(pick(['#2f6b2a', '#3b7f33', '#26592a']), { roughness: 1 }), rand(4, 8), rand(5, 9), rand(4, 8), rand(-6, 6), rand(3, 6), rand(-8, 8)));
+  return g;
+}
+function makeSpiritHouse() {
+  const g = new THREE.Group(), gold = mc('#e8b830', { roughness: 0.35, metalness: 0.6 }), red = mc('#c8322b');
+  g.add(mesh(CYL16, mc('#f4efe6'), 0.12, 1.6, 0.12, 0, 0.8, 0)); g.add(box(gold, 0.9, 0.08, 0.9, 0, 1.62, 0));
+  g.add(box(gold, 0.6, 0.55, 0.6, 0, 1.95, 0));
+  const r = mesh(new THREE.CylinderGeometry(0.01, 1, 1, 4, 1), red, 0.6, 0.5, 0.6, 0, 2.45, 0); r.rotation.y = Math.PI / 4; g.add(r);
+  for (const x of [-0.25, 0.25]) g.add(sph(mc(pick(['#ff7a2a', '#ffd23f', '#ff4f7b'])), 0.1, 0.1, 0.1, x, 1.72, 0.38)); // marigolds
+  return g;
+}
+function makeFoodCart() {
+  const g = new THREE.Group(), cart = mc(pick(['#2f8fd8', '#e8343f', '#3bb07a']), { roughness: 0.5 }), steel = mc('#c9ced4', { roughness: 0.3, metalness: 0.7 });
+  g.add(box(cart, 1.8, 0.9, 0.9, 0, 0.75, 0)); g.add(box(steel, 1.8, 0.05, 0.9, 0, 1.22, 0));
+  for (const x of [-0.6, 0.6]) { const w = mesh(CYL16, mc('#222'), 0.3, 0.1, 0.3, x, 0.3, 0.48); w.rotation.x = Math.PI / 2; g.add(w); }
+  g.add(mesh(CYL16, steel, 0.03, 1.6, 0.03, 0.7, 2.0, 0));
+  const um = mesh(new THREE.ConeGeometry(1.3, 0.5, 10), mc(pick(['#ff7a2a', '#ffd23f', '#ff4f7b', '#ffffff'])), 1, 1, 1, 0.7, 2.9, 0); g.add(um);
+  g.add(sph(mc('#fff2b0', { emissive: '#ffcc66', emissiveIntensity: 0.9 }), 0.12, 0.14, 0.12, 0.7, 2.5, 0));
+  for (let k = 0; k < 4; k++) g.add(sph(mc(pick(['#ffb347', '#ff6b4a', '#9ccc65', '#ffe08a'])), 0.12, 0.08, 0.12, -0.6 + k * 0.4, 1.3, 0)); // food
+  g.rotation.y = rand(-0.5, 0.5) - Math.PI / 2;
+  return g;
+}
+function makeTukTuk() {
+  const g = new THREE.Group(), body = mc(pick(['#1e88e5', '#43a047', '#fdd835', '#e53935']), { roughness: 0.4, metalness: 0.2 }), dark = mc('#222226');
+  g.add(box(body, 1.2, 0.6, 2.2, 0, 0.7, 0)); g.add(box(body, 0.9, 0.6, 0.6, 0, 1.1, -1.0));
+  g.add(box(mc('#f4f1ea'), 1.3, 0.08, 2.0, 0, 1.95, 0.1));
+  for (const [x, z] of [[-0.55, 0.8], [0.55, 0.8]]) g.add(box(dark, 0.05, 1.2, 0.05, x, 1.35, z));
+  for (const [x, z] of [[-0.6, 0.8], [0.6, 0.8], [0, -1.2]]) { const w = mesh(CYL16, dark, 0.3, 0.18, 0.3, x, 0.3, z); w.rotation.z = Math.PI / 2; g.add(w); }
+  g.rotation.y = rand(0, Math.PI * 2);
+  return g;
+}
+function makeBeachSet() {
+  const g = new THREE.Group(), stripe = mc(pick(['#ff7a2a', '#2fb5c8', '#ff4f7b', '#ffd23f']), { roughness: 0.6 });
+  g.add(mesh(CYL16, mc('#ffffff'), 0.04, 2.2, 0.04, 0, 1.1, 0));
+  g.add(mesh(new THREE.ConeGeometry(1.4, 0.45, 12), stripe, 1, 1, 1, 0, 2.2, 0));
+  for (const x of [-0.7, 0.7]) { const l = box(mc('#f4f1ea'), 0.6, 0.12, 1.7, x, 0.3, 0.6); l.rotation.x = -0.12; g.add(l); }
+  return g;
+}
+function makeLanternString() {
+  const g = new THREE.Group(), wood = mc('#6b4a33');
+  g.add(mesh(CYL16, wood, 0.07, 3, 0.07, 0, 1.5, -4)); g.add(mesh(CYL16, wood, 0.07, 3, 0.07, 0, 1.5, 4));
+  for (let k = 0; k <= 10; k++) {
+    const z = -4 + k * 0.8, sag = Math.sin((k / 10) * Math.PI) * 0.6;
+    const col = pick(['#ff5a5a', '#ffd23f', '#5ad1ff', '#7dff8a', '#ff7af0']);
+    g.add(sph(mc(col, { emissive: col, emissiveIntensity: 1.2, roughness: 0.4 }), 0.09, 0.11, 0.09, 0, 2.9 - sag, z));
+  }
+  return g;
+}
+const makeParkedScooter = () => { const g = makeScooter(); g.rotation.y = rand(0.6, 2.4); return g; };
 const PROPS = {
   desert: [[0.32, makePalm, 48, 62], [0.22, makeDune, 70, 130], [0.14, makeCamel, 52, 72], [0.22, makePyramid, 80, 150], [0.1, makeVan, 48, 54]],
   moscow: [[0.35, makeLamp, 47.4, 47.4], [0.42, makeTower, 95, 160], [0.14, makeKremlinTower, 70, 90], [0.09, makeBasil, 64, 74]],
@@ -1069,12 +1153,20 @@ const PROPS = {
   hawaii: [[0.36, makePalm, 48, 64], [0.18, makeTiki, 52, 62], [0.2, makeHibiscus, 47.5, 58], [0.12, makeBoardRack, 48, 51], [0.14, makeHill, 80, 140]],
   phiphi: [[0.34, makeKarst, 16, 70, 'sea'], [0.16, makeLongtail, 11, 24, 'float'], [0.3, makePalm, 48, 60], [0.12, makeTiki, 50, 58], [0.08, makeKarst, 60, 120]],
   glacier: [[0.34, makeIceberg, 13, 60, 'float'], [0.26, makeIceCliff, 52, 80], [0.2, makePenguins, 47.5, 50], [0.2, makeIceberg, 60, 110, 'sea']],
+  // 'spit' stands on the sandy spit next to the wave
+  thai: [[0.2, makePalm, 8.5, 10.6, 'spit'], [0.1, makeBeachSet, 8.2, 10.4, 'spit'], [0.08, makeFoodCart, 8.6, 10.2, 'spit'], [0.06, makeTukTuk, 8.6, 10.4, 'spit'],
+    [0.06, makeSpiritHouse, 9, 10.6, 'spit'], [0.06, makeLanternString, 9.6, 10.6, 'spit'], [0.05, makeParkedScooter, 8.6, 10.4, 'spit'],
+    [0.08, makeLongtail, 13, 26, 'float'], [0.1, makeWat, 60, 100], [0.08, makeStupa, 52, 90], [0.08, makeJungle, 50, 120], [0.05, makePalm, 48, 60]],
 };
 function makeGround(b) {
   const g = new THREE.Group(), id = BIOMES[b].id;
   g.add(box(mc(BIOMES[b].ground, { roughness: 1 }), 220, 1.6, GROUND_LEN + 0.6, SHORE_X + 110, 0, 0));
   if (id === 'moscow' || id === 'piter') g.add(box(mc(id === 'moscow' ? '#7d8287' : '#b49a8a', { roughness: 0.9 }), 1.2, 1.1, GROUND_LEN + 0.6, SHORE_X + 0.6, 1.3, 0));
-  else g.add(box(mc({ desert: '#efc08a', tomsk: '#c9b07a', hawaii: '#e8d3a4', phiphi: '#fbf3de', glacier: '#d6ecf6' }[id], { roughness: 1 }), 6, 0.9, GROUND_LEN + 0.6, SHORE_X - 1.5, 0.05, 0));
+  else g.add(box(mc({ desert: '#efc08a', tomsk: '#c9b07a', hawaii: '#e8d3a4', phiphi: '#fbf3de', glacier: '#d6ecf6', thai: '#f3dcae' }[id], { roughness: 1 }), 6, 0.9, GROUND_LEN + 0.6, SHORE_X - 1.5, 0.05, 0));
+  if (id === 'thai') { // the spit by the wave: pale sand with a wet darker edge toward the water
+    g.add(box(mc('#f6e3b8', { roughness: 1 }), THAI_SPIT_W, 0.9, GROUND_LEN + 0.6, THAI_SPIT_X, 0, 0));
+    g.add(box(mc('#dcc38e', { roughness: 1 }), 1.4, 0.6, GROUND_LEN + 0.6, THAI_SPIT_X - THAI_SPIT_W / 2 - 0.3, -0.2, 0));
+  }
   if (id === 'moscow') {
     const red = RED(); g.add(box(red, 2.2, 7, GROUND_LEN, SHORE_X + 9, 4.3, 0));
     g.add(mesh(MERLONS, red, 1, 1, 1, SHORE_X + 9, 8.4, 0));
@@ -1092,7 +1184,7 @@ function addProp(z) {
   const list = PROPS[BIOMES[biomeForZ(z)].id];
   let r = Math.random() * list.reduce((s, x) => s + x[0], 0), item = list[0];
   for (const it of list) { r -= it[0]; if (r <= 0) { item = it; break; } }
-  const g = item[1](); g.position.set(rand(item[2], item[3]), item[4] ? -0.3 : 0.8, z); g.userData.float = item[4] === 'float'; scene.add(g); scenery.push(g);
+  const g = item[1](); g.position.set(rand(item[2], item[3]), item[4] === 'spit' ? 0.45 : item[4] ? -0.3 : 0.8, z); g.userData.float = item[4] === 'float'; scene.add(g); scenery.push(g);
 }
 function addGround(z) { const g = makeGround(biomeForZ(z)); g.position.z = z; scene.add(g); scenery.push(g); }
 function updateScenery(dz) {
@@ -1134,6 +1226,10 @@ const skylines = BIOMES.map(() => { const g = new THREE.Group(); g.visible = fal
   ({ near: n, far: f } = skylines[5].userData); g = skylines[5];
   for (let i = 0; i < 16; i++) { const h = rand(40, 120), r = rand(10, 22), x = 60 + i * 26 + rand(-8, 8), z = -560 - rand(0, 80); g.add(sph(i % 2 ? n : f, r, h * 0.5, r, x, h * 0.4, z)); g.add(sph(i % 2 ? n : f, r * 0.7, h * 0.3, r * 0.7, x, h * 0.8, z)); }
   ({ near: n, far: f } = skylines[6].userData); g = skylines[6]; skylines[6].userData.mats = [[n, 1.04], [f, 1.12]];
+  ({ near: n, far: f } = skylines[7].userData); g = skylines[7];
+  for (let i = 0; i < 12; i++) { const r = rand(40, 90), h = rand(30, 70); g.add(sph(i % 2 ? n : f, r, h, 40, 40 + i * 40 + rand(-10, 10), -4, -600 - (i % 2) * 40)); }
+  for (const [x, s] of [[150, 1], [235, 1.4], [320, 0.8]]) { g.add(sph(n, 10 * s, 12 * s, 10 * s, x, 40 * s, -560)); g.add(mesh(new THREE.ConeGeometry(1, 1, 12), n, 4 * s, 30 * s, 4 * s, x, 62 * s, -560)); }
+  ({ near: n, far: f } = skylines[6].userData); g = skylines[6];
   for (let i = 0; i < 14; i++) { const h = rand(60, 150); g.add(mesh(new THREE.ConeGeometry(1, 1, 5), i % 2 ? n : f, rand(40, 70), h, rand(40, 70), 70 + i * 30 + rand(-10, 10), h / 2 - 4, -600 - (i % 3) * 30)); }
 }
 
@@ -1147,19 +1243,32 @@ const PAL = {
     deep: '#124a5e', shallow: '#2a96a0', wall: '#74dccf', refl: '#f2c6c6', sunCol: '#ffe1cc', hemiSky: '#ffe2e0', hemiGround: '#2e6f80', hemiI: 1.2, sun: '#ffc4b0', sunI: 2.0, fillI: 1.1 },
   day: { horizon: '#d4ecf5', mid: '#a6d2ef', top: '#4a8fdc', glow: '#fff2c0', disc: '#fffef4', cloud: '#ffffff', glowAmt: 0.5, night: 0, elev: 0.45,
     deep: '#0a4d6a', shallow: '#1aa3b0', wall: '#6fe6d8', refl: '#9cc6dc', sunCol: '#a39b88', hemiSky: '#e8f4ff', hemiGround: '#2f7f8c', hemiI: 1.3, sun: '#fff1d6', sunI: 2.6, fillI: 1.1 },
+  // every location has its own light: Hawaii tropical noon, Phi-Phi golden hour, glaciers polar twilight, Thailand hot hazy afternoon
+  hawaii: { horizon: '#bfeaff', mid: '#7cc8f2', top: '#1f6fd1', glow: '#fff6c8', disc: '#fffef8', cloud: '#ffffff', glowAmt: 0.7, night: 0, elev: 0.5,
+    deep: '#04607a', shallow: '#13b7c9', wall: '#7ef2ee', refl: '#a7dcf0', sunCol: '#fff2c0', hemiSky: '#eaf7ff', hemiGround: '#2f8fa0', hemiI: 1.4, sun: '#fff6e0', sunI: 2.8, fillI: 1.1 },
+  golden: { horizon: '#ffc98a', mid: '#f7a35c', top: '#5b7fc4', glow: '#ffb347', disc: '#fff1c8', cloud: '#ffcf9a', glowAmt: 1.1, night: 0, elev: 0.12,
+    deep: '#0a5868', shallow: '#1aa7a8', wall: '#7fe2cf', refl: '#ffc890', sunCol: '#ffd08a', hemiSky: '#ffe0b8', hemiGround: '#2f7a78', hemiI: 1.3, sun: '#ffc07a', sunI: 2.5, fillI: 1.1 },
+  polar: { horizon: '#cfe8ff', mid: '#8fb6e8', top: '#2b3a78', glow: '#a0fff0', disc: '#f0fbff', cloud: '#e6f2ff', glowAmt: 0.6, night: 0.35, elev: 0.05,
+    deep: '#0b3d5c', shallow: '#2a7fa0', wall: '#a6e6f2', refl: '#bcd6f2', sunCol: '#e8f6ff', hemiSky: '#e6f2ff', hemiGround: '#3a6f8a', hemiI: 1.25, sun: '#e6f0ff', sunI: 1.8, fillI: 1.2 },
+  thai: { horizon: '#ffc49a', mid: '#ff9fb4', top: '#5b6fd0', glow: '#ffb070', disc: '#fff6dc', cloud: '#ffd6e0', glowAmt: 1.35, night: 0, elev: 0.28,
+    deep: '#05707f', shallow: '#1fd6c9', wall: '#8cf6e6', refl: '#ffd0a8', sunCol: '#ffe2a8', hemiSky: '#fff0dc', hemiGround: '#2f9a90', hemiI: 1.45, sun: '#ffe0b0', sunI: 2.8, fillI: 1.15 },
   // the wish field: Kuban at noon — scorching sun, hazy warm horizon, deep blue overhead
   field: { horizon: '#fbe7b8', mid: '#9fd0f4', top: '#2f7fd6', glow: '#fff3b8', disc: '#fffdf0', cloud: '#ffffff', glowAmt: 1.4, night: 0, elev: 0.2,
     deep: '#0a4d6a', shallow: '#1aa3b0', wall: '#6fe6d8', refl: '#fff0c8', sunCol: '#ffe7a8', hemiSky: '#fff6dc', hemiGround: '#9a8a48', hemiI: 1.55, sun: '#fff2cc', sunI: 3.1, fillI: 1.0 },
 };
 const TOD = Object.fromEntries(Object.entries(PAL).map(([k, p]) => [k, Object.fromEntries(Object.entries(p).map(([f, v]) => [f, typeof v === 'string' ? new THREE.Color(v) : v]))]));
 const CUR = Object.fromEntries(Object.entries(TOD.sunset).map(([f, v]) => [f, v.isColor ? v.clone() : v]));
-const TOD_KEYS = [[0, 'sunset'], [0.1, 'sunset'], [0.22, 'night'], [0.42, 'night'], [0.53, 'dawn'], [0.62, 'day'], [0.86, 'day'], [1, 'sunset']];
 const _srgb = {}, _hz = new THREE.Color();
 const toV3 = (c, v) => { c.getRGB(_srgb, THREE.SRGBColorSpace); v.set(_srgb.r, _srgb.g, _srgb.b); };
-function applyTOD(tod) {
-  let i = 0; while (i < TOD_KEYS.length - 2 && tod > TOD_KEYS[i + 1][0]) i++;
-  const [t0, a] = TOD_KEYS[i], [t1, b] = TOD_KEYS[i + 1];
-  const k = THREE.MathUtils.smoothstep(tod, t0, t1), A = TOD[a], B = TOD[b];
+const MOOD = { desert: 'sunset', moscow: 'day', piter: 'dawn', tomsk: 'night', hawaii: 'hawaii', phiphi: 'golden', glacier: 'polar', thai: 'thai' };
+const MOOD_BLEND = 140; // distance over which one place's light turns into the next one's
+function moodAt(d) {
+  const a = MOOD[BIOMES[biomeAt(d)].id], into = d % BIOME_LEN;
+  if (into < BIOME_LEN - MOOD_BLEND) return [a, a, 0];
+  return [a, MOOD[BIOMES[biomeAt(d + MOOD_BLEND)].id], THREE.MathUtils.smoothstep(into, BIOME_LEN - MOOD_BLEND, BIOME_LEN)];
+}
+function applyTOD([a, b, k]) {
+  const A = TOD[a], B = TOD[b];
   for (const f in CUR) { if (CUR[f].isColor) CUR[f].lerpColors(A[f], B[f], k); else CUR[f] = lerp(A[f], B[f], k); }
   if (LAND.v > 0) for (const f in CUR) { if (CUR[f].isColor) CUR[f].lerp(TOD.field[f], LAND.v); else CUR[f] = lerp(CUR[f], TOD.field[f], LAND.v); }
   const u = skyMat.uniforms;
@@ -1223,6 +1332,10 @@ const Sound = {
         this.nextT += fs; this.step++; continue;
       }
       const s = this.step % 16, bar = Math.floor(this.step / 16) % 4, [bass, tones] = this.chords[bar], t = this.nextT;
+      if (this.thai) { // ranat-like pentatonic runs: short bright sine strikes
+        const pent = [587.33, 659.25, 739.99, 880, 987.77, 1174.66], pat = [0, 2, 4, 3, 5, 4, 2, 1, 3, 2, 0, 1, 4, 3, 2, 3];
+        if (s % 2 === 0 || bar === 3) { const f = pent[pat[(s + bar * 3) % 16]]; this.tone(f, t, 0.18, 'sine', 0.05, this.music); this.tone(f * 2, t, 0.06, 'sine', 0.015, this.music); }
+      }
       if (s === 0 || s === 8 || s === 10) this.kick(t);
       if (s === 4 || s === 12) this.snap(t);
       if (s % 2 === 1) this.hat(t, s % 4 === 3 ? 0.05 : 0.03);
@@ -1322,7 +1435,7 @@ const G = {
   state: 'loading', lives: 3, t: 0, run: 0, dist: 0, runDist: 0, speed: 12, score: 0, scoreF: 0, melons: 0, best: store.get('best', 0),
   boost: 0, boostMax: 6.5, fly: 0, husky: 0, wall: 0, wallRoll: 0, nextRowZ: -50, sincePower: 0, lastHit: null, streak: 0, lastMelonT: 0, shake: 0,
   slowmo: 1, dyingT: 0, stumbleT: 0, nextPropZ: 70, nextGroundZ: 80, biome: -1, nextCameo: 14, cameoIdx: 0,
-  order: [0, 1, 2, 3, 4, 5, 6], nextCritter: 2,
+  order: [0, 1, 2, 3, 4, 5, 6, 7], nextCritter: 2,
 };
 const START_LIVES = 3, MAX_LIVES = 5;
 const FLY_T = 6.5, FLY_H = 5.2, HUSKY_T = 3.4, HUSKY_H = 8.5;
@@ -1638,6 +1751,12 @@ const CARPET_LINES = [
   'Летим в Томск, что привезти?', 'Не отвлекайся, там Паша!', 'Желаем попутной волны! 🌊', 'Угли кончаются, полетели за новыми', 'Курим за твоё здоровье 😅',
 ];
 const FEDOR_ARRIVE = ['behind', 'ahead', 'lip'], FEDOR_ACT = ['ride', 'overtake', 'jump', 'wipeout'];
+// Vanya rides a scooter along a sandbank by the wave, all the way from Thailand
+const VANYA_LINES = [
+  'Оля, с днюхой из Таиланда! 🌴', 'Сават-ди-кха! С днём рождения, Оля! 🙏', 'Олька, с днём рождения! Обнимаю! 🤗', 'С ДР, Оля! Манго и волн тебе! 🥭',
+  'Бип-бип! С днём рождения, Оля! 🎂', 'Оля, с днюхой! Улыбнись в сторис 📱', 'С днём рождения! Ловим волну вместе 🤙', 'Оля, поздравляю! Жду в Таиланде 🛵',
+]
+const VANYA_ACT = ['selfie', 'wave', 'wheelie', 'honk'];
 const CARPET_ARRIVE = ['swoop', 'behind', 'spiral', 'drop'], CARPET_ACT = ['calm', 'fall', 'loop', 'embers'], CARPET_EXIT = ['up', 'zoom', 'back'];
 function draw(key, arr) {
   let d = store.get('deck.' + key, null);
@@ -1658,6 +1777,93 @@ function spawnFedor() {
   const portrait = camera.aspect < 0.9;
   g.position.set(9, -6, 16); scene.add(g);
   cameos.push({ kind: 'fedor', g, p, board, sp, t: 0, x: portrait ? 3.7 : 5.6, zt: portrait ? -6 : -2, line, act, arrive: draw('fedorArrive', FEDOR_ARRIVE), A: 1.5, M: act === 'overtake' ? 3.4 : 4.6 });
+}
+function makeScooter() {
+  const g = new THREE.Group(), body = mc(pick(['#e8343f', '#f4f1ea', '#2f8fd8']), { roughness: 0.35, metalness: 0.2 }), dark = mc('#222226', { roughness: 0.8 }), chrome = mc('#c9ced4', { roughness: 0.25, metalness: 0.8 });
+  const wheel = () => { const w = new THREE.Group(); const t = new THREE.Mesh(new THREE.TorusGeometry(0.28, 0.09, 8, 18), dark); t.rotation.y = Math.PI / 2; w.add(t); w.add(mesh(CYL16, chrome, 0.12, 0.1, 0.12)); w.children[1].rotation.z = Math.PI / 2; return w; };
+  const wf = wheel(), wr = wheel(); wf.position.set(0, 0.37, -0.75); wr.position.set(0, 0.37, 0.72); g.add(wf, wr);
+  g.add(box(body, 0.42, 0.42, 0.9, 0, 0.62, 0.45));          // rear body under the seat
+  g.add(box(dark, 0.36, 0.12, 0.8, 0, 0.88, 0.38));          // seat
+  g.add(box(body, 0.36, 0.08, 0.6, 0, 0.42, -0.15));         // floorboard
+  const shield = box(body, 0.4, 0.75, 0.12, 0, 0.82, -0.55); shield.rotation.x = 0.25; g.add(shield);
+  const fork = mesh(CYL16, chrome, 0.04, 0.8, 0.04, 0, 0.75, -0.7); fork.rotation.x = 0.3; g.add(fork);
+  g.add(box(dark, 0.7, 0.05, 0.05, 0, 1.2, -0.62));          // handlebar
+  g.add(sph(mc('#fff6c8', { emissive: '#fff0a0', emissiveIntensity: 0.6 }), 0.08, 0.07, 0.04, 0, 1.12, -0.72)); // headlight
+  g.userData = { wf, wr };
+  return g;
+}
+function makeVanya() {
+  const g = new THREE.Group();
+  const bike = makeScooter(); g.add(bike);
+  const p = makePerson({ shirt: '#1d1d22', pants: '#4a5566', hair: '#c9a56a', skin: '#f0c4a4', sit: true }); p.position.set(0, 0.78, 0.15); p.rotation.y = Math.PI; g.add(p);
+  const h = p.userData.head, dread = mc('#b8925a', { roughness: 0.9 });
+  // open-face helmet with a tinted visor, dreads tied back and sticking out
+  const helm = new THREE.Mesh(new THREE.SphereGeometry(0.16, 18, 10, 0, Math.PI * 2, 0, Math.PI * 0.6), mc('#1f2a33', { roughness: 0.35, metalness: 0.2 })); helm.position.y = 0.03; h.add(helm);
+  const visor = new THREE.Mesh(new THREE.SphereGeometry(0.17, 18, 8, -0.9, 1.8, 0.55, 0.65), new THREE.MeshStandardMaterial({ color: '#3d7c86', transparent: true, opacity: 0.55, roughness: 0.1 })); visor.position.y = 0.03; h.add(visor);
+  for (let k = 0; k < 5; k++) { const d = mesh(CYL16, dread, 0.025, 0.42, 0.025, (k - 2) * 0.035, -0.18, -0.13); d.rotation.x = 0.35 + k * 0.05; h.add(d); }
+  // the yellow phone
+  const phone = box(mc('#ffd21f', { roughness: 0.4 }), 0.09, 0.17, 0.02, 0, -0.62, 0.02); p.userData.armB.add(phone);
+  g.userData = { bike, p, phone };
+  return g;
+}
+// a sandbank that surfaces next to the wave for Vanya to ride on, a few palms on it
+function addSandbank(c, z) {
+  const seg = new THREE.Group(), w = rand(3.2, 4.2);
+  seg.add(box(mc('#ecd3a0', { roughness: 1 }), w, 0.9, 10.4, 0, -0.1, 0));
+  seg.add(box(mc('#d9bd86', { roughness: 1 }), w + 0.8, 0.5, 10.4, -0.2, -0.35, 0));   // wet edge
+  if (Math.random() < 0.35) { const pl = makePalm(); pl.scale.setScalar(0.45); pl.position.set(w * 0.35, 0.3, rand(-3, 3)); seg.add(pl); }
+  seg.position.set(c.x + 0.6, -2, z); seg.userData.rise = 0; scene.add(seg); c.sand.push(seg);
+}
+function spawnVanya() {
+  const onSpit = BIOMES[G.biome] && BIOMES[G.biome].id === 'thai';
+  const portrait = camera.aspect < 0.9, g = makeVanya(), x = onSpit ? (portrait ? 5.6 : 7.4) : portrait ? 5.4 : 9.5;
+  g.scale.setScalar(1.25);
+  const line = draw('vanyaLine', VANYA_LINES), act = line.includes('сторис') ? 'selfie' : line.startsWith('Бип') ? 'honk' : draw('vanyaAct', VANYA_ACT);
+  const sp = makeSpeech(line, '— Ваня, Таиланд 🛵'); sp.position.set(-0.6, 2.7, 0); sp.visible = false; g.add(sp);
+  g.position.set(x, -4, 22); scene.add(g);
+  const c = { kind: 'vanya', g, sp, t: 0, x, zt: portrait ? -12 : -6, line, act, A: 1.8, M: 4.8, sand: [], nextSand: 30 };
+  c.onSpit = onSpit;
+  if (!onSpit) for (let z = 30; z > -80; z -= 10) addSandbank(c, z);
+  c.nextSand = -80;
+  cameos.push(c);
+}
+function updateVanya(c, dt, t, dz) {
+  const A = c.A, E = A + c.M, u = c.g.userData;
+  // the sandbank scrolls with the water: rises while Vanya is around, sinks after
+  const alive = c.t < E + 1.2;
+  c.nextSand += dz; while (alive && !c.onSpit && c.nextSand > -80) { addSandbank(c, c.nextSand); c.nextSand -= 10; }
+  const top = c.onSpit ? 0.45 : swell(c.x) + 0.3;
+  for (let i = c.sand.length - 1; i >= 0; i--) {
+    const s = c.sand[i]; s.position.z += dz;
+    s.userData.rise = damp(s.userData.rise, alive ? 1 : 0, 2.5, dt);
+    s.position.y = lerp(-2, top - 0.35, s.userData.rise);
+    if (s.position.z > 30 || (!alive && s.userData.rise < 0.02)) { scene.remove(s); c.sand.splice(i, 1); }
+  }
+  let z, y = top, lean = 0, pitch = 0;
+  if (c.t < A) { const k = c.t / A; z = lerp(22, c.zt, easeOut(k)); y = lerp(-1.5, top, Math.min(1, k * 3)); lean = -0.15 * (1 - k); }
+  else if (c.t < E) {
+    const m = c.t - A; z = c.zt + Math.sin(m * 1.2) * 0.6;
+    if (!c.said) {
+      burst(c.x, 2.6, z, 70, { spread: 3, up: 6, life: 1.4, size: 0.16, colors: ['#ff4f7b', '#ffc93c', '#4fd1c5', '#ff8a3d', '#ffffff', '#8b6cff'], grav: 7, scroll: 0, abs: true }); // birthday confetti
+      floatText('🎉', c.x, 3.4, z, 'smash');
+    }
+    if (!c.said) { c.said = true; c.sp.visible = true; Sound.hello(); notice('🎂 Ваня поздравляет Олю из Таиланда'); }
+    if (c.act === 'wheelie' && m > 1 && m < 3.4) pitch = Math.sin(Math.PI * (m - 1) / 2.4) * 0.45;
+    if (c.act === 'honk' && !c.honked && m > 0.6) { c.honked = true; const t0 = Sound.now(); Sound.tone(520, t0, 0.12, 'square', 0.05); Sound.tone(520, t0 + 0.18, 0.12, 'square', 0.05); floatText('бип-бип! 🛵', c.x, 2.6, z); }
+  } else { const e = c.t - E; z = c.zt - e * e * 18; if (e > 0.4) c.sp.visible = false; lean = 0.1; }
+  c.g.position.set(c.x, y, z);
+  c.g.rotation.set(pitch, 0.25 + Math.sin(t * 1.4) * 0.04, lean + Math.sin(t * 2.1) * 0.04);
+  u.bike.userData.wf.rotation.x -= dt * 14; u.bike.userData.wr.rotation.x -= dt * 14;
+  // arms: hands on the bars, or the act
+  const arm = u.p.userData.armB, armA = u.p.userData.armA, act = c.t > A && c.t < E ? c.act : 'ride';
+  armA.rotation.set(-1.25, 0, -0.25);
+  if (act === 'selfie') { arm.rotation.set(-2.5, 0, 0.5 + Math.sin(t * 2) * 0.05); u.phone.visible = true; }
+  else if (act === 'wave') { arm.rotation.set(-0.2, 0, 2.6 + Math.sin(t * 12) * 0.35); u.phone.visible = false; }
+  else { arm.rotation.set(-1.25, 0, 0.25); u.phone.visible = false; }
+  if (y > 0 && Math.random() < 0.6) emit(c.x + rand(-0.2, 0.2), y + 0.15, z + 0.9, rand(-0.6, 0.6), rand(0.4, 1.4), rand(0.5, 2), rand(0.4, 0.8), rand(0.18, 0.32), pick(['#ecd3a0', '#d9bd86', '#ffffff']), 4);
+  const done = c.t > E + 3 && !c.sand.length;
+  if (done) for (const s of c.sand) scene.remove(s);
+  return done;
 }
 function spawnCarpet() {
   const g = makeCarpet(); g.scale.setScalar(1.4); scene.add(g);
@@ -1774,11 +1980,11 @@ function updateCarpet(c, dt, t, dz) {
 function updateCameos(dt, t, dz) {
   for (let i = cameos.length - 1; i >= 0; i--) {
     const c = cameos[i]; c.t += dt;
-    const done = c.kind === 'fedor' ? updateFedor(c, dt, t, dz) : updateCarpet(c, dt, t, dz);
-    if (done) { disposeSprites(c.g); scene.remove(c.g); cameos.splice(i, 1); }
+    const done = c.kind === 'fedor' ? updateFedor(c, dt, t, dz) : c.kind === 'vanya' ? updateVanya(c, dt, t, dz) : updateCarpet(c, dt, t, dz);
+    if (done) { disposeSprites(c.g); scene.remove(c.g); cameos.splice(i, 1); if (c.kind === 'carpet' && G.state === 'play') queueThailand(); }
   }
 }
-function clearCameos() { for (const c of cameos) { disposeSprites(c.g); scene.remove(c.g); for (const e of c.embers || []) scene.remove(e.m); } cameos.length = 0; }
+function clearCameos() { for (const c of cameos) { disposeSprites(c.g); scene.remove(c.g); for (const e of c.embers || []) scene.remove(e.m); for (const s of c.sand || []) scene.remove(s); } cameos.length = 0; }
 
 // Olya's ride extras: coffee jet under the board, a husky to sit on
 const jet = new THREE.Group(); jet.visible = false; olya.model.add(jet);
@@ -1922,7 +2128,7 @@ function startRun() {
   Sound.init(); if (G.crack) endCrack(); Sound.setMode('surf');
   if (FIELD.exitBtn) FIELD.exitBtn.hidden = true; if (FIELD.tractorBtn) FIELD.tractorBtn.hidden = true; FIELD.inside = false; ui.score.parentElement.hidden = false; player.z = 0;
   clearEntities(); clearCameos(); resetRide();
-  Object.assign(G, { state: 'play', run: 0, runDist: 0, speed: 15, score: 0, scoreF: 0, melons: 0, boost: 0, fly: 0, husky: 0, wall: 0, wallRoll: 0, loop: false, nextPinch: rand(16, 22), nextRowZ: -55, sincePower: 5, streak: 0, slowmo: 1, stumbleT: 0, biome: -1, nextCameo: rand(10, 14), lastHit: null, speedLvl: 0, lives: START_LIVES, order: shuffledOrder() });
+  Object.assign(G, { state: 'play', run: 0, runDist: 0, speed: 15, score: 0, scoreF: 0, melons: 0, boost: 0, fly: 0, husky: 0, wall: 0, wallRoll: 0, loop: false, nextPinch: rand(16, 22), nextRowZ: -55, sincePower: 5, streak: 0, slowmo: 1, stumbleT: 0, biome: -1, nextCameo: rand(10, 14), lastHit: null, speedLvl: 0, lives: START_LIVES, order: shuffledOrder(), thaiQueued: false });
   Object.assign(player, { lane: 1, prevLane: 1, h: 0, vy: 0, air: false, duckT: 0, invuln: 0, trick: 0 });
   resetScenery();
   camMode = 'chase';
@@ -2458,15 +2664,23 @@ function update(rawDt) {
   else if (G.state !== 'paused') G.speed = damp(G.speed, 11, 1, dt);
   const dz = G.speed * dt;
   G.dist += dz;
-  if (playing || dying) G.runDist += dz;
+  if (playing || dying) {
+    // while Zhanna & Andrey are flying by, hold the next place back — Thailand comes right after them
+    const holdForCarpet = !G.thaiQueued && cameos.some((c) => c.kind === 'carpet') && BIOME_LEN - (G.runDist % BIOME_LEN) < MOOD_BLEND + 30;
+    if (!holdForCarpet) G.runDist += dz;
+  }
   waterUniforms.uTime.value = t; waterUniforms.uDist.value = G.dist; skyMat.uniforms.uTime.value = t;
-  applyTOD(G.state === 'title' ? 0 : (G.runDist / TOD_LEN) % 1);
+  Sound.thai = G.mode !== 'field' && G.state === 'play' && BIOMES[biomeAt(G.runDist)].id === 'thai';
+  applyTOD(G.state === 'title' ? ['sunset', 'sunset', 0] : moodAt(G.runDist));
 
 
   // biome name + skylines
   const cur = biomeAt(G.runDist);
   const inField = G.mode === 'field';
-  if (playing && !inField && cur !== G.biome) { G.biome = cur; notice(BIOMES[cur].name); }
+  if (playing && !inField && cur !== G.biome) {
+    G.biome = cur; notice(BIOMES[cur].name);
+    if (BIOMES[cur].id === 'phiphi' || BIOMES[cur].id === 'thai') { G.vanyaHere = false; G.nextCameo = Math.min(G.nextCameo, 4); } // Vanya lives there
+  }
   skylines.forEach((s, i) => { const u = s.userData; u.o = damp(u.o, i === cur && !inField ? 1 : 0, 0.9, rawDt); s.visible = u.o > 0.01; u.near.opacity = u.far.opacity = u.o; for (const [m, k] of u.extra || []) m.opacity = u.o * k * (0.8 + 0.2 * Math.sin(t * 3)); });
   kuban.visible = inField;
   for (const sc of scenery) sc.visible = !inField;
@@ -2490,7 +2704,7 @@ function update(rawDt) {
       if (G.wall <= 0) {
         // kick out of the curtain and drop onto the right lane
         G.wall = 0; G.loop = false; player.lane = player.prevLane = pinchAt(-G.dist) > 0.2 ? 1 : 2;
-        player.air = true; player.vy = 2; player.jumpT = 0; player.trick = 0; player.invuln = Math.max(player.invuln, 0.6);
+        player.air = true; player.vy = 2; player.jumpT = 0; player.trick = 0; G.safeT = 0.8; // quiet landing grace, no damage blink
         burst(player.x, player.h, 0.3, 40, { spread: 3, up: 4, life: 0.8, size: 0.35 });
       }
     } else if (G.wall > 0) {
@@ -2521,6 +2735,7 @@ function update(rawDt) {
     }
     player.duckT = Math.max(0, player.duckT - dt);
     player.invuln = Math.max(0, player.invuln - dt);
+    G.safeT = Math.max(0, (G.safeT || 0) - dt);
     G.stumbleT = Math.max(0, G.stumbleT - dt);
   } else if (!dying) {
     player.x = damp(player.x, Math.sin(t * 0.35) * 0.9, 2, dt);
@@ -2648,7 +2863,12 @@ function update(rawDt) {
       while (G.nextRowZ > -150) { spawnRow(G.nextRowZ); G.nextRowZ -= rowGap(); }
     }
     G.nextCameo -= dt;
-    if (G.nextCameo <= 0 && !cameos.length) { (G.cameoIdx++ % 2 ? spawnCarpet : spawnFedor)(); G.nextCameo = rand(15, 22); }
+    if (G.nextCameo <= 0 && !cameos.length && !PINCH.active) {
+      const bid = BIOMES[G.biome] && BIOMES[G.biome].id;
+      if (bid === 'thai' || (bid === 'phiphi' && !G.vanyaHere)) { G.vanyaHere = true; spawnVanya(); }
+      else [spawnFedor, spawnCarpet][G.cameoIdx++ % 2]();
+      G.nextCameo = rand(15, 22);
+    }
   }
   for (let i = entities.length - 1; i >= 0; i--) {
     const e = entities[i];
@@ -2714,7 +2934,8 @@ function update(rawDt) {
   updateScenery(dz);
   updateCameos(dt, t, dz);
   const biomeId = BIOMES[cur].id;
-  if (G.mode !== 'field') updateCritters(dt, dz, t, biomeId);
+  if (G.mode !== 'field' && biomeId !== 'thai') updateCritters(dt, dz, t, biomeId);
+  if (biomeId === 'thai' && G.mode !== 'field' && Math.random() < 0.06) emit(rand(-30, 60), rand(4, 10), rand(-160, -40), rand(-0.3, 0.3), rand(0.6, 1.2), rand(-0.2, 0.2), rand(6, 10), rand(0.5, 0.9), pick(['#ffb347', '#ff9a3c', '#ffd27a']), -0.05, 1); // khom loi
   if (biomeId === 'glacier' && G.mode !== 'field' && (playing || G.state === 'title')) for (let i = 0; i < 2; i++) emit(rand(-10, 14), rand(5, 10), rand(-45, 6), rand(-0.3, 0.3), -rand(0.8, 1.8), 0, 4, rand(0.06, 0.12), '#ffffff', 0, 1);
 
   if (playing && G.mode !== 'field') {
@@ -2735,7 +2956,7 @@ function update(rawDt) {
 }
 
 function hitObstacle(e) {
-  if (flying() || G.wall > 0) return;
+  if (flying() || G.wall > 0 || G.safeT > 0) return;
   if (e.fragile) {
     e.dead = true; G.scoreF += 30; Sound.glass();
     burst(e.x, 1.0, e.z, 45, { spread: 3.5, up: 5, life: 0.8, size: 0.22, colors: ['#ffffff', '#cfe0ff', '#9ec1ff', '#6a5cff'] });
@@ -2825,7 +3046,7 @@ function frame() {
   for (const m of PASHA) bubbleTexture(m);
   for (const m of KIRILL) bubbleTexture(m, 'kirill');
   resetScenery();
-  applyTOD(0);
+  applyTOD(['sunset', 'sunset', 0]);
   G.state = 'title';
   poseOlya(0, 0, 0, 0, 0.5);
   renderer.compile(scene, camera);
@@ -2833,7 +3054,7 @@ function frame() {
   setTimeout(() => $('loading').classList.add('done'), 150);
   Wishes.load();
   // debug handle: deterministic stepping for testing in a hidden tab
-  window.__arbuz = { G, player, entities, cameos, LAND, PINCH, startRun, startPower, addPower, addObstacle, spawnFedor, spawnCarpet, resetScenery, jump, duck, move, Wishes,
+  window.__arbuz = { G, player, entities, cameos, LAND, PINCH, olya, startRun, startPower, addPower, addObstacle, spawnFedor, spawnCarpet, spawnVanya, resetScenery, jump, duck, move, Wishes,
     step(sec) { for (let i = 0; i < Math.round(sec * 60); i++) update(1 / 60); renderer.render(scene, camera); },
     setView(w, h) { renderer.setPixelRatio(1); renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); } };
 })();
